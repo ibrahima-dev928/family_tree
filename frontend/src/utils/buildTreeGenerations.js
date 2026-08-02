@@ -1,24 +1,20 @@
 const CARD_WIDTH = 168;
 const CARD_HEIGHT = 108;
-const H_GAP = 64;
-const V_GAP = 150;
 const COUPLE_GAP = 28;
+const SUBTREE_GAP = 36;
+const V_GAP = 150;
 
-/**
- * Transforme les données brutes de /api/tree en une structure positionnée :
- * chaque personne reçoit des coordonnées (x, y), et chaque relation
- * parent-enfant devient un segment de ligne prêt à dessiner en SVG.
- */
 export function buildTreeLayout({ persons, parentChildRelations, partnerships }) {
   const personById = new Map(persons.map((p) => [p.id, p]));
 
   const parentsOf = new Map();
   parentChildRelations.forEach(({ parentId, childId }) => {
+    if (!personById.has(parentId) || !personById.has(childId)) return;
     if (!parentsOf.has(childId)) parentsOf.set(childId, []);
     parentsOf.get(childId).push(parentId);
   });
 
-  // 1. Génération de chaque personne (0 = racine, pas de parent connu)
+  // 1. Génération de chaque personne (0 = racine)
   const generationOf = new Map();
   function computeGeneration(personId, visited = new Set()) {
     if (generationOf.has(personId)) return generationOf.get(personId);
@@ -35,9 +31,10 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
   }
   persons.forEach((p) => computeGeneration(p.id));
 
-  // 2. Regroupe les couples (partenaires de même génération affichés côte à côte)
+  // 2. Regroupe les couples (partenaires de même génération, affichés côte à côte)
   const partnerOf = new Map();
   partnerships.forEach((p) => {
+    if (!personById.has(p.person1Id) || !personById.has(p.person2Id)) return;
     if (!partnerOf.has(p.person1Id)) partnerOf.set(p.person1Id, []);
     if (!partnerOf.has(p.person2Id)) partnerOf.set(p.person2Id, []);
     partnerOf.get(p.person1Id).push(p.person2Id);
@@ -46,6 +43,8 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
 
   const maxGen = Math.max(0, ...Array.from(generationOf.values()));
   const genGroups = [];
+  const personToGroup = new Map();
+  let groupCounter = 0;
 
   for (let gen = 0; gen <= maxGen; gen++) {
     const peopleInGen = persons.filter((p) => generationOf.get(p.id) === gen);
@@ -57,24 +56,75 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
       const partnerIds = (partnerOf.get(person.id) || []).filter(
         (id) => generationOf.get(id) === gen && !placed.has(id)
       );
+      const groupId = `g${groupCounter++}`;
       if (partnerIds.length > 0) {
         placed.add(person.id);
         placed.add(partnerIds[0]);
-        groups.push({ members: [person, personById.get(partnerIds[0])] });
+        const partner = personById.get(partnerIds[0]);
+        groups.push({ id: groupId, members: [person, partner], childGroupIds: [] });
+        personToGroup.set(person.id, groupId);
+        personToGroup.set(partner.id, groupId);
       } else {
         placed.add(person.id);
-        groups.push({ members: [person] });
+        groups.push({ id: groupId, members: [person], childGroupIds: [] });
+        personToGroup.set(person.id, groupId);
       }
     });
 
     genGroups.push(groups);
   }
 
+  const groupById = new Map();
+  genGroups.forEach((groups) => groups.forEach((g) => groupById.set(g.id, g)));
+
+  // 3. Rattache chaque personne au groupe de son premier parent (parent "principal")
+  persons.forEach((person) => {
+    const parents = parentsOf.get(person.id);
+    if (!parents || parents.length === 0) return;
+    const parentGroupId = personToGroup.get(parents[0]);
+    const childGroupId = personToGroup.get(person.id);
+    if (!parentGroupId || !childGroupId) return;
+    const parentGroup = groupById.get(parentGroupId);
+    if (parentGroup && !parentGroup.childGroupIds.includes(childGroupId)) {
+      parentGroup.childGroupIds.push(childGroupId);
+    }
+  });
+
   function groupWidth(group) {
     return group.members.length === 2 ? CARD_WIDTH * 2 + COUPLE_GAP : CARD_WIDTH;
   }
 
-  function placeGroupMembers(group, centerX, y, positions) {
+  // 4. Largeur du sous-arbre de chaque groupe (calcul du bas vers le haut) :
+  //    un groupe réserve au moins la somme des largeurs de ses enfants.
+  const subtreeWidth = new Map();
+  function computeSubtreeWidth(groupId) {
+    if (subtreeWidth.has(groupId)) return subtreeWidth.get(groupId);
+    const group = groupById.get(groupId);
+    const ownWidth = groupWidth(group);
+    const childIds = group.childGroupIds;
+
+    if (childIds.length === 0) {
+      subtreeWidth.set(groupId, ownWidth);
+      return ownWidth;
+    }
+
+    const childrenTotal = childIds.reduce((sum, cid, idx) => {
+      return sum + computeSubtreeWidth(cid) + (idx > 0 ? SUBTREE_GAP : 0);
+    }, 0);
+
+    const width = Math.max(ownWidth, childrenTotal);
+    subtreeWidth.set(groupId, width);
+    return width;
+  }
+  genGroups.forEach((groups) => groups.forEach((g) => computeSubtreeWidth(g.id)));
+
+  // 5. Positionnement du haut vers le bas : chaque groupe est centré sur son sous-arbre,
+  //    ses enfants sont répartis et centrés sous lui.
+  const positions = new Map();
+
+  function placeGroup(groupId, centerX, y) {
+    const group = groupById.get(groupId);
+
     if (group.members.length === 2) {
       const totalWidth = CARD_WIDTH * 2 + COUPLE_GAP;
       const startX = centerX - totalWidth / 2;
@@ -83,60 +133,51 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
     } else {
       positions.set(group.members[0].id, { x: centerX - CARD_WIDTH / 2, y, width: CARD_WIDTH });
     }
+
+    const childIds = group.childGroupIds;
+    if (childIds.length > 0) {
+      const totalChildrenWidth = childIds.reduce((sum, cid, idx) => {
+        return sum + subtreeWidth.get(cid) + (idx > 0 ? SUBTREE_GAP : 0);
+      }, 0);
+
+      let cursor = centerX - totalChildrenWidth / 2;
+      childIds.forEach((cid) => {
+        const cw = subtreeWidth.get(cid);
+        const childCenterX = cursor + cw / 2;
+        const childGen = generationOf.get(groupById.get(cid).members[0].id);
+        placeGroup(cid, childCenterX, childGen * V_GAP);
+        cursor += cw + SUBTREE_GAP;
+      });
+    }
   }
 
-  const positions = new Map();
-
-  // Génération 0 : alignée de gauche à droite, dans l'ordre reçu
-  let cursor = 0;
-  genGroups[0]?.forEach((group) => {
-    const w = groupWidth(group);
-    const centerX = cursor + w / 2;
-    placeGroupMembers(group, centerX, 0, positions);
-    cursor += w + H_GAP;
+  // Place les groupes racines (génération 0) de gauche à droite
+  let rootCursor = 0;
+  genGroups[0]?.forEach((g) => {
+    const w = subtreeWidth.get(g.id);
+    placeGroup(g.id, rootCursor + w / 2, 0);
+    rootCursor += w + SUBTREE_GAP;
   });
 
-  // Générations suivantes : chaque groupe se positionne sous la moyenne de ses parents,
-  // trié par position parentale pour garder les fratries groupées et éviter les croisements.
-  for (let gen = 1; gen <= maxGen; gen++) {
-    const groups = genGroups[gen] || [];
-
-    const groupsWithDesiredX = groups.map((group) => {
-      const parentIds = parentsOf.get(group.members[0].id) || [];
-      const parentXs = parentIds
-        .map((pId) => {
-          const pos = positions.get(pId);
-          return pos ? pos.x + CARD_WIDTH / 2 : undefined;
-        })
-        .filter((x) => x !== undefined);
-
-      const desiredX = parentXs.length > 0
-        ? parentXs.reduce((a, b) => a + b, 0) / parentXs.length
-        : null;
-
-      return { group, desiredX };
-    });
-
-    // Trie : les groupes avec parents connus d'abord (par position), puis les orphelins à la suite
-    groupsWithDesiredX.sort((a, b) => {
-      if (a.desiredX === null && b.desiredX === null) return 0;
-      if (a.desiredX === null) return 1;
-      if (b.desiredX === null) return -1;
-      return a.desiredX - b.desiredX;
-    });
-
-    let genCursor = 0;
-    groupsWithDesiredX.forEach(({ group, desiredX }) => {
-      const w = groupWidth(group);
-      const minCenter = genCursor + w / 2;
-      const centerX = desiredX !== null ? Math.max(desiredX, minCenter) : minCenter;
-
-      placeGroupMembers(group, centerX, gen * V_GAP, positions);
-      genCursor = centerX + w / 2 + H_GAP;
+  // Filet de sécurité : place tout groupe qui n'aurait pas été atteint depuis une racine
+  let fallbackCursor = rootCursor + 100;
+  for (let gen = 0; gen <= maxGen; gen++) {
+    genGroups[gen]?.forEach((g) => {
+      const alreadyPlaced = g.members.every((m) => positions.has(m.id));
+      if (!alreadyPlaced) {
+        const w = groupWidth(g);
+        placeGroup(g.id, fallbackCursor + w / 2, gen * V_GAP);
+        fallbackCursor += w + SUBTREE_GAP;
+      }
     });
   }
 
-  // 3. Segments de ligne parent -> enfant, à partir des positions finales
+  // 6. Recentre tout l'arbre pour qu'il commence à x=0 avec une marge
+  const minX = Math.min(...Array.from(positions.values()).map((p) => p.x));
+  const shiftX = -minX + 30;
+  positions.forEach((pos) => { pos.x += shiftX; });
+
+  // 7. Lignes parent -> enfant, pour TOUTES les relations (pas seulement le parent principal)
   const lines = parentChildRelations
     .map(({ parentId, childId }) => {
       const p = positions.get(parentId);
