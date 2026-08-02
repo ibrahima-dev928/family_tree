@@ -40,8 +40,7 @@ function AppLayout() {
         <div className="sidebar-footer">
           <div className="avatar-sm">
             {user?.person?.photoUrl ? (
-              <img src={`http://localhost:4000${user.person.photoUrl}`} alt="" />
-            ) : (
+              <img src={`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}${user.person.photoUrl}`} alt="" />) : (
               user?.email?.[0]?.toUpperCase() || '?'
             )}
           </div>

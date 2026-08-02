@@ -13,9 +13,12 @@ function Profile() {
   const { user, setUser } = useAuthStore();
   const person = user?.person;
 
+  // URL de base de l'API (utilise la variable d'environnement ou fallback)
+  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
   // --- Photo ---
   const [photoPreview, setPhotoPreview] = useState(
-    person?.photoUrl ? `http://localhost:4000${person.photoUrl}` : null
+    person?.photoUrl ? `${API_BASE}${person.photoUrl}` : null
   );
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoError, setPhotoError] = useState(null);
@@ -50,7 +53,8 @@ function Profile() {
     setPhotoError(null);
     try {
       const updatedPerson = await uploadPersonPhoto(person.id, file);
-      setPhotoPreview(`http://localhost:4000${updatedPerson.photoUrl}`);
+      const fullUrl = `${API_BASE}${updatedPerson.photoUrl}`;
+      setPhotoPreview(fullUrl);
       setUser({ ...user, person: { ...user.person, photoUrl: updatedPerson.photoUrl } });
     } catch (err) {
       setPhotoError(err.response?.data?.error?.message || 'Erreur lors de l\'envoi.');
