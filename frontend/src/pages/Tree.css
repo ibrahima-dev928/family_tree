@@ -42,10 +42,13 @@
   background-image: radial-gradient(circle at 1px 1px, rgba(28, 43, 36, 0.09) 1px, transparent 0);
   background-size: 22px 22px;
   max-height: calc(100vh - 100px);
+  display: flex;
+  justify-content: center;
 }
 
 .tree-canvas-inner {
   position: relative;
+  margin: 0 auto;
 }
 
 .tree-lines {
