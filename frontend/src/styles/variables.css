@@ -1,0 +1,23 @@
+:root {
+  /* Couleurs */
+  --ink: #1C2B24;
+  --ink-deep: #14201A;
+  --paper: #F7F4EC;
+  --paper-raised: #FFFDF8;
+  --copper: #B8763E;
+  --copper-deep: #96602F;
+  --sage: #7A8B7F;
+  --seal: #B84A3E;
+  --line: rgba(28, 43, 36, 0.14);
+
+  /* Typographie */
+  --font-display: 'Fraunces', serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Rayons & ombres réutilisables */
+  --radius-sm: 7px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow-card: 0 8px 20px rgba(28, 43, 36, 0.1);
+}

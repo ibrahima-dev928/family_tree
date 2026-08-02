@@ -1,0 +1,129 @@
+.tree-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tree-add-btn {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.tree-add-btn:hover {
+  background: var(--paper-raised);
+  border-color: var(--copper);
+}
+
+.tree-page {
+  margin: -40px -48px;
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-page .tree-header {
+  padding: 24px 48px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-raised);
+}
+
+.tree-page .tree-header h1 {
+  font-size: 24px;
+}
+
+.tree-canvas {
+  overflow: auto;
+  padding: 50px 48px;
+  background-image: radial-gradient(circle at 1px 1px, rgba(28, 43, 36, 0.09) 1px, transparent 0);
+  background-size: 22px 22px;
+  max-height: calc(100vh - 100px);
+}
+
+.tree-canvas-inner {
+  position: relative;
+}
+
+.tree-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.tree-card-abs {
+  position: absolute;
+  width: 168px;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 14px 14px 12px;
+  text-align: center;
+  transition: box-shadow 0.15s, transform 0.15s;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.tree-card-abs:hover {
+  box-shadow: var(--shadow-card);
+  transform: translateY(-2px);
+  z-index: 2;
+}
+
+.tree-card-abs.deceased {
+  opacity: 0.72;
+}
+
+.tree-card-abs.deceased::after {
+  content: '✝';
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 11px;
+  color: var(--sage);
+}
+
+.tree-card-photo {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--sage);
+  color: var(--ink-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 20px;
+  margin: 0 auto 10px;
+  border: 2px solid var(--paper);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.tree-card-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.tree-card-dates {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--sage);
+  margin-top: 4px;
+}
+
+.tree-card-tag {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--copper-deep);
+  background: rgba(184, 118, 62, 0.12);
+  padding: 2px 8px;
+  border-radius: 10px;
+}

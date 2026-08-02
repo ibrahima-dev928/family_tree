@@ -1,0 +1,98 @@
+.evform-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 32, 26, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.evform-modal {
+  background: var(--paper-raised);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 50px rgba(20, 32, 26, 0.25);
+}
+
+.evform-modal h2 {
+  font-size: 19px;
+  margin-bottom: 18px;
+}
+
+.evform-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.evform-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.evform-field label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.evform-field input,
+.evform-field select,
+.evform-field textarea {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13.5px;
+  color: var(--ink);
+  font-family: var(--font-body);
+  resize: vertical;
+}
+
+.evform-error {
+  background: rgba(184, 74, 62, 0.08);
+  border: 1px solid rgba(184, 74, 62, 0.25);
+  color: var(--seal);
+  font-size: 12.5px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+}
+
+.evform-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.evform-cancel {
+  flex: 1;
+  padding: 11px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.evform-submit {
+  flex: 1;
+  padding: 11px;
+  border: none;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.evform-submit:disabled {
+  opacity: 0.6;
+}

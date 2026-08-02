@@ -1,0 +1,150 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper);
+  background-image: radial-gradient(circle at 1px 1px, rgba(28, 43, 36, 0.08) 1px, transparent 0);
+  background-size: 22px 22px;
+  padding: 20px;
+}
+
+.login-card {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 40px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: var(--shadow-card);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 500;
+  color: var(--ink);
+  margin-bottom: 28px;
+}
+
+.login-brand-mark {
+  width: 30px;
+  height: 30px;
+  border: 1.5px solid var(--copper);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--copper);
+  font-family: var(--font-display);
+}
+
+.login-card h1 {
+  font-size: 26px;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.login-sub {
+  font-size: 13.5px;
+  color: var(--sage);
+  margin-top: 8px;
+  margin-bottom: 28px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-row {
+  display: flex;
+  gap: 12px;
+}
+
+.login-row .login-field {
+  flex: 1;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login-field label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.login-field input {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  font-size: 14px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.login-field input:focus {
+  border-color: var(--copper);
+}
+
+.login-error {
+  background: rgba(184, 74, 62, 0.08);
+  border: 1px solid rgba(184, 74, 62, 0.25);
+  color: var(--seal);
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+}
+
+.login-submit {
+  background: var(--ink);
+  color: var(--paper);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 13px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 6px;
+  transition: background 0.15s;
+}
+
+.login-submit:hover:not(:disabled) {
+  background: var(--ink-deep);
+}
+
+.login-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.login-switch {
+  text-align: center;
+  font-size: 13px;
+  color: var(--sage);
+  margin-top: 24px;
+}
+
+.login-switch button {
+  background: none;
+  border: none;
+  color: var(--copper-deep);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 0;
+  margin-left: 4px;
+}
+
+.login-switch button:hover {
+  text-decoration: underline;
+}

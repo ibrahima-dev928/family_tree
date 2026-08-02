@@ -1,0 +1,294 @@
+// ============================================================
+// SCHEMA PRISMA - Fil des Générations
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// PERSONNES (fiche généalogique, avec ou sans compte)
+// ============================================================
+model Person {
+  id               String   @id @default(uuid())
+  firstName        String   @map("first_name")
+  lastName         String   @map("last_name")
+  maidenName       String?  @map("maiden_name")
+  gender           Gender?
+  birthDate        DateTime? @map("birth_date") @db.Date
+  birthPlace       String?  @map("birth_place")
+  deathDate        DateTime? @map("death_date") @db.Date
+  deathPlace       String?  @map("death_place")
+  bio              String?
+  photoUrl         String?  @map("photo_url")
+  occupation       String?
+  validationStatus ValidationStatus @default(pending) @map("validation_status")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user                  User?
+  editRequests          PersonEditRequest[]
+  parentRelations       ParentChildRelation[] @relation("ParentRelations")
+  childRelations        ParentChildRelation[] @relation("ChildRelations")
+  partnershipsAsPerson1 Partnership[] @relation("Person1")
+  partnershipsAsPerson2 Partnership[] @relation("Person2")
+
+  @@map("persons")
+}
+
+enum Gender {
+  male
+  female
+  other
+}
+
+enum ValidationStatus {
+  pending
+  approved
+  rejected
+}
+
+// ============================================================
+// UTILISATEURS (compte de connexion, lié 1-1 à une personne)
+// ============================================================
+model User {
+  id           String   @id @default(uuid())
+  personId     String?  @unique @map("person_id")
+  person       Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
+  memberNumber String   @unique @map("member_number")
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  phone        String?
+  role         Role     @default(member)
+  isActive     Boolean  @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  createdEvents         Event[] @relation("EventCreator")
+  eventRsvps            EventRsvp[]
+  editRequestsMade      PersonEditRequest[] @relation("RequestedBy")
+  editRequestsReviewed  PersonEditRequest[] @relation("ReviewedBy")
+  conversationsCreated  Conversation[] @relation("ConversationCreator")
+  conversationMemberships ConversationParticipant[]
+  messagesSent          Message[]
+  notifications         Notification[]
+
+  @@map("users")
+}
+
+enum Role {
+  admin
+  moderator
+  member
+}
+
+// ============================================================
+// RELATIONS FAMILIALES
+// ============================================================
+model ParentChildRelation {
+  id           String       @id @default(uuid())
+  parentId     String       @map("parent_id")
+  parent       Person       @relation("ParentRelations", fields: [parentId], references: [id], onDelete: Cascade)
+  childId      String       @map("child_id")
+  child        Person       @relation("ChildRelations", fields: [childId], references: [id], onDelete: Cascade)
+  relationType RelationType @default(biological) @map("relation_type")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  @@unique([parentId, childId])
+  @@map("parent_child_relations")
+}
+
+enum RelationType {
+  biological
+  adoptive
+  step
+}
+
+model Partnership {
+  id          String   @id @default(uuid())
+  person1Id   String   @map("person1_id")
+  person1     Person   @relation("Person1", fields: [person1Id], references: [id], onDelete: Cascade)
+  person2Id   String   @map("person2_id")
+  person2     Person   @relation("Person2", fields: [person2Id], references: [id], onDelete: Cascade)
+  status      PartnershipStatus @default(married)
+  unionDate   DateTime? @map("union_date") @db.Date
+  unionPlace  String?  @map("union_place")
+  endDate     DateTime? @map("end_date") @db.Date
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("partnerships")
+}
+
+enum PartnershipStatus {
+  married
+  divorced
+  widowed
+  partner
+  separated
+}
+
+// Workflow de validation admin — TOUTE écriture sur l'arbre passe par ici
+model PersonEditRequest {
+  id            String   @id @default(uuid())
+  personId      String?  @map("person_id")
+  person        Person?  @relation(fields: [personId], references: [id], onDelete: Cascade)
+  requestedById String   @map("requested_by")
+  requestedBy   User     @relation("RequestedBy", fields: [requestedById], references: [id])
+  changeType    ChangeType @map("change_type")
+  payload       Json
+  status        ValidationStatus @default(pending)
+  reviewedById  String?  @map("reviewed_by")
+  reviewedBy    User?    @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  reviewNote    String?  @map("review_note")
+  createdAt     DateTime @default(now()) @map("created_at")
+  reviewedAt    DateTime? @map("reviewed_at")
+
+  @@map("person_edit_requests")
+}
+
+enum ChangeType {
+  create
+  update
+  delete
+  add_relation
+}
+
+// ============================================================
+// ÉVÉNEMENTS & ANNONCES
+// ============================================================
+model Event {
+  id             String    @id @default(uuid())
+  title          String
+  eventType      EventType @map("event_type")
+  description    String?
+  coverImageUrl  String?   @map("cover_image_url")
+  eventDate      DateTime  @map("event_date")
+  endDate        DateTime? @map("end_date")
+  location       String?
+  createdById    String    @map("created_by")
+  createdBy      User      @relation("EventCreator", fields: [createdById], references: [id])
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  rsvps     EventRsvp[]
+  reminders EventReminder[]
+
+  @@map("events")
+}
+
+enum EventType {
+  bapteme
+  mariage
+  reunion
+  anniversaire
+  deces
+  autre
+}
+
+model EventRsvp {
+  id           String       @id @default(uuid())
+  eventId      String       @map("event_id")
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId       String       @map("user_id")
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  response     RsvpResponse @default(pending)
+  guestsCount  Int          @default(0) @map("guests_count")
+  respondedAt  DateTime?    @map("responded_at")
+
+  @@unique([eventId, userId])
+  @@map("event_rsvps")
+}
+
+enum RsvpResponse {
+  pending
+  yes
+  no
+  maybe
+}
+
+model EventReminder {
+  id       String   @id @default(uuid())
+  eventId  String   @map("event_id")
+  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  remindAt DateTime @map("remind_at")
+  sent     Boolean  @default(false)
+
+  @@map("event_reminders")
+}
+
+// ============================================================
+// MESSAGERIE
+// ============================================================
+model Conversation {
+  id          String   @id @default(uuid())
+  isGroup     Boolean  @default(false) @map("is_group")
+  title       String?
+  createdById String?  @map("created_by")
+  createdBy   User?    @relation("ConversationCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  conversationId String   @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String   @map("user_id")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt       DateTime @default(now()) @map("joined_at")
+  lastReadAt     DateTime? @map("last_read_at")
+
+  @@id([conversationId, userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  conversationId String   @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String   @map("sender_id")
+  sender         User     @relation(fields: [senderId], references: [id])
+  content        String
+  attachmentUrl  String?  @map("attachment_url")
+  sentAt         DateTime @default(now()) @map("sent_at")
+  editedAt       DateTime? @map("edited_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  @@index([conversationId, sentAt])
+  @@map("messages")
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String?
+  link      String?
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  message
+  event
+  validation
+  rsvp
+  system
+}

@@ -1,0 +1,241 @@
+.dash-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 36px;
+}
+
+.dash-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--copper-deep);
+  margin-bottom: 8px;
+}
+
+.dash-btn-primary {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 13.5px;
+  padding: 11px 20px;
+  border-radius: var(--radius-sm);
+  background: var(--ink);
+  color: var(--paper);
+  display: inline-block;
+}
+
+.dash-btn-primary:hover {
+  background: var(--ink-deep);
+}
+
+/* ---- STATS ---- */
+.dash-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 40px;
+}
+
+.dash-stat-card {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+}
+
+.dash-stat-num {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 500;
+}
+
+.dash-stat-label {
+  font-size: 12.5px;
+  color: var(--sage);
+  margin-top: 4px;
+}
+
+/* ---- GRID / PANELS ---- */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 24px;
+}
+
+.dash-panel {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.dash-panel-head {
+  padding: 20px 22px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.dash-panel-head h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.dash-link {
+  font-size: 12.5px;
+  color: var(--copper-deep);
+  font-weight: 500;
+}
+
+.dash-empty {
+  padding: 20px 22px;
+  font-size: 13px;
+  color: var(--sage);
+}
+
+/* ---- EVENT ROWS ---- */
+.dash-event-row {
+  display: flex;
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--line);
+  align-items: center;
+}
+
+.dash-event-row:last-child {
+  border-bottom: none;
+}
+
+.dash-event-date {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dash-event-date .day {
+  font-family: var(--font-display);
+  font-size: 19px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.dash-event-date .month {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  color: var(--sage);
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+
+.dash-event-info {
+  flex: 1;
+}
+
+.dash-event-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.dash-event-meta {
+  font-size: 12.5px;
+  color: var(--sage);
+}
+
+.dash-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 4px 9px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.dash-badge-mariage {
+  background: rgba(184, 118, 62, 0.14);
+  color: var(--copper-deep);
+}
+
+.dash-badge-bapteme {
+  background: rgba(122, 139, 127, 0.16);
+  color: var(--sage);
+}
+
+.dash-badge-reunion {
+  background: rgba(28, 43, 36, 0.08);
+  color: var(--ink);
+}
+
+.dash-badge-anniversaire {
+  background: rgba(184, 118, 62, 0.14);
+  color: var(--copper-deep);
+}
+
+.dash-badge-deces {
+  background: rgba(184, 74, 62, 0.1);
+  color: var(--seal);
+}
+
+.dash-badge-autre {
+  background: rgba(28, 43, 36, 0.08);
+  color: var(--ink);
+}
+
+/* ---- VALIDATION REQUESTS ---- */
+.dash-req-row {
+  display: flex;
+  gap: 14px;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--line);
+  align-items: center;
+}
+
+.dash-req-row:last-child {
+  border-bottom: none;
+}
+
+.dash-seal {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(184, 74, 62, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--seal);
+  font-family: var(--font-display);
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.dash-req-info {
+  flex: 1;
+}
+
+.dash-req-title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.dash-req-meta {
+  font-size: 12px;
+  color: var(--sage);
+  margin-top: 2px;
+}
+
+@media (max-width: 900px) {
+  .dash-grid {
+    grid-template-columns: 1fr;
+  }
+}

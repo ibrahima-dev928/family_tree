@@ -1,0 +1,255 @@
+.pdetail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 32, 26, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.pdetail-modal {
+  background: var(--paper-raised);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 50px rgba(20, 32, 26, 0.25);
+}
+
+.pdetail-header {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.pdetail-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--sage);
+  color: var(--ink-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.pdetail-header h2 {
+  font-size: 19px;
+}
+
+.pdetail-id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--copper-deep);
+  margin-top: 3px;
+}
+
+.pdetail-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.pdetail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13.5px;
+}
+
+.pdetail-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--sage);
+}
+
+.pdetail-empty {
+  font-size: 13px;
+  color: var(--sage);
+}
+
+.pdetail-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.pdetail-form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.pdetail-form-row .pdetail-field {
+  flex: 1;
+}
+
+.pdetail-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pdetail-field label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pdetail-field input,
+.pdetail-field textarea {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13.5px;
+  font-family: var(--font-body);
+  resize: vertical;
+}
+
+.pdetail-error {
+  background: rgba(184, 74, 62, 0.08);
+  border: 1px solid rgba(184, 74, 62, 0.25);
+  color: var(--seal);
+  font-size: 12.5px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+}
+
+.pdetail-success {
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--ink);
+  padding: 20px 0;
+}
+
+.pdetail-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.pdetail-cancel {
+  flex: 1;
+  padding: 11px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pdetail-edit {
+  flex: 1;
+  padding: 11px;
+  border: none;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pdetail-edit:disabled {
+  opacity: 0.6;
+}
+
+.pdetail-delete-trigger {
+  display: block;
+  width: 100%;
+  text-align: center;
+  margin-top: 14px;
+  padding: 10px;
+  background: none;
+  border: 1px solid rgba(184, 74, 62, 0.3);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--seal);
+}
+
+.pdetail-delete-trigger:hover {
+  background: rgba(184, 74, 62, 0.06);
+}
+
+.pdetail-confirm-delete {
+  margin-top: 14px;
+  padding: 14px;
+  background: rgba(184, 74, 62, 0.06);
+  border: 1px solid rgba(184, 74, 62, 0.25);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.pdetail-confirm-delete p {
+  font-size: 13px;
+  color: var(--seal);
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.pdetail-delete-confirm {
+  flex: 1;
+  padding: 9px;
+  background: var(--seal);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.pdetail-relations {
+  margin-bottom: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pdetail-rel-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pdetail-rel-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.pdetail-rel-row button {
+  background: none;
+  border: none;
+  color: var(--seal);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 2px 6px;
+}
+
+.pdetail-rel-row button:hover:not(:disabled) {
+  background: rgba(184, 74, 62, 0.1);
+  border-radius: 4px;
+}
+
+.pdetail-rel-row button:disabled {
+  opacity: 0.4;
+}
