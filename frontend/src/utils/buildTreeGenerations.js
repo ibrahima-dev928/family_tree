@@ -14,6 +14,7 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
     parentsOf.get(childId).push(parentId);
   });
 
+  // 1. Génération initiale de chaque personne (0 = racine, pas de parent connu)
   const generationOf = new Map();
   function computeGeneration(personId, visited = new Set()) {
     if (generationOf.has(personId)) return generationOf.get(personId);
@@ -38,6 +39,31 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
     partnerOf.get(p.person1Id).push(p.person2Id);
     partnerOf.get(p.person2Id).push(p.person1Id);
   });
+
+  // 2. Aligne la génération des conjoints (toujours identique entre partenaires),
+  //    et répercute l'effet sur leurs descendants, jusqu'à stabilisation.
+  for (let pass = 0; pass < 20; pass++) {
+    let changed = false;
+
+    partnerships.forEach((p) => {
+      if (!personById.has(p.person1Id) || !personById.has(p.person2Id)) return;
+      const g1 = generationOf.get(p.person1Id) ?? 0;
+      const g2 = generationOf.get(p.person2Id) ?? 0;
+      const maxGen = Math.max(g1, g2);
+      if (g1 !== maxGen) { generationOf.set(p.person1Id, maxGen); changed = true; }
+      if (g2 !== maxGen) { generationOf.set(p.person2Id, maxGen); changed = true; }
+    });
+
+    parentChildRelations.forEach(({ parentId, childId }) => {
+      if (!personById.has(parentId) || !personById.has(childId)) return;
+      const parentGen = generationOf.get(parentId) ?? 0;
+      const childGen = generationOf.get(childId) ?? 0;
+      const minChildGen = parentGen + 1;
+      if (childGen < minChildGen) { generationOf.set(childId, minChildGen); changed = true; }
+    });
+
+    if (!changed) break;
+  }
 
   const maxGen = Math.max(0, ...Array.from(generationOf.values()));
   const genGroups = [];
@@ -75,6 +101,7 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
   const groupById = new Map();
   genGroups.forEach((groups) => groups.forEach((g) => groupById.set(g.id, g)));
 
+  // 3. Rattache chaque personne au groupe de son premier parent (parent "principal")
   persons.forEach((person) => {
     const parents = parentsOf.get(person.id);
     if (!parents || parents.length === 0) return;
@@ -91,6 +118,7 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
     return group.members.length === 2 ? CARD_WIDTH * 2 + COUPLE_GAP : CARD_WIDTH;
   }
 
+  // 4. Largeur du sous-arbre de chaque groupe (calcul du bas vers le haut)
   const subtreeWidth = new Map();
   function computeSubtreeWidth(groupId) {
     if (subtreeWidth.has(groupId)) return subtreeWidth.get(groupId);
@@ -113,6 +141,7 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
   }
   genGroups.forEach((groups) => groups.forEach((g) => computeSubtreeWidth(g.id)));
 
+  // 5. Positionnement du haut vers le bas
   const positions = new Map();
   const groupCenterX = new Map();
 
@@ -197,17 +226,14 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
       const childCenters = group.childGroupIds.map((cid) => groupCenterX.get(cid));
       const childTopY = positions.get(groupById.get(group.childGroupIds[0]).members[0].id).y;
 
-      // Tronçon vertical depuis le parent jusqu'au bus horizontal
       descentSegments.push({ x1: parentCenterX, y1: parentBottomY, x2: parentCenterX, y2: busY });
 
-      // Bus horizontal reliant tous les enfants (seulement s'il y en a plus d'un)
       if (childCenters.length > 1) {
         const minX = Math.min(...childCenters);
         const maxX = Math.max(...childCenters);
         descentSegments.push({ x1: minX, y1: busY, x2: maxX, y2: busY });
       }
 
-      // Tronçons verticaux depuis le bus jusqu'à chaque enfant
       childCenters.forEach((cx) => {
         descentSegments.push({ x1: cx, y1: busY, x2: cx, y2: childTopY });
       });
