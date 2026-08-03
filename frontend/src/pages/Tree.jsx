@@ -3,7 +3,7 @@ import { getFullTree } from '../api/tree.api';
 import { buildTreeLayout } from '../utils/buildTreeGenerations';
 import RelationForm from '../components/RelationForm';
 import PersonForm from '../components/PersonForm';
-import PersonDetail from '../components/PersonDetail'; // Ajout
+import PersonDetail from '../components/PersonDetail';
 import './Tree.css';
 
 function initials(firstName, lastName) {
@@ -25,7 +25,7 @@ function Tree() {
   const [error, setError] = useState(null);
   const [showRelationForm, setShowRelationForm] = useState(false);
   const [showPersonForm, setShowPersonForm] = useState(false);
-  const [selectedPerson, setSelectedPerson] = useState(null); // Ajout
+  const [selectedPerson, setSelectedPerson] = useState(null);
 
   async function loadTree() {
     try {
@@ -79,19 +79,22 @@ function Tree() {
               width={layout.canvasWidth}
               height={layout.canvasHeight}
             >
-              {layout.lines.map((line, idx) => {
-                const midY = (line.y1 + line.y2) / 2;
-                const path = `M ${line.x1} ${line.y1} C ${line.x1} ${midY}, ${line.x2} ${midY}, ${line.x2} ${line.y2}`;
-                return (
-                  <path
-                    key={idx}
-                    d={path}
-                    fill="none"
-                    stroke="rgba(28, 43, 36, 0.28)"
-                    strokeWidth="1.5"
-                  />
-                );
-              })}
+              {layout.marriageLines.map((line, idx) => (
+                <line
+                  key={`m-${idx}`}
+                  x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2}
+                  stroke="var(--copper)"
+                  strokeWidth="2"
+                />
+              ))}
+              {layout.descentSegments.map((seg, idx) => (
+                <line
+                  key={`d-${idx}`}
+                  x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2}
+                  stroke="rgba(28, 43, 36, 0.35)"
+                  strokeWidth="1.5"
+                />
+              ))}
             </svg>
 
             {layout.placedPersons.map((person) => {
@@ -101,7 +104,7 @@ function Tree() {
                   key={person.id}
                   className={`tree-card-abs ${isDeceased ? 'deceased' : ''}`}
                   style={{ left: person.x, top: person.y }}
-                  onClick={() => setSelectedPerson(person)} // Ajout
+                  onClick={() => setSelectedPerson(person)}
                 >
                   <div className="tree-card-photo">{initials(person.firstName, person.lastName)}</div>
                   <div className="tree-card-name">{person.firstName} {person.lastName}</div>
