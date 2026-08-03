@@ -1,0 +1,99 @@
+.actu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 32, 26, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.actu-modal {
+  background: var(--paper-raised);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 20px 50px rgba(20, 32, 26, 0.25);
+}
+
+.actu-modal h2 {
+  font-size: 19px;
+}
+
+.actu-sub {
+  font-size: 12.5px;
+  color: var(--sage);
+  margin-top: 6px;
+  margin-bottom: 20px;
+}
+
+.actu-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.actu-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.actu-field label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.actu-field select {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13.5px;
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+.actu-error {
+  background: rgba(184, 74, 62, 0.08);
+  border: 1px solid rgba(184, 74, 62, 0.25);
+  color: var(--seal);
+  font-size: 12.5px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+}
+
+.actu-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.actu-cancel {
+  flex: 1;
+  padding: 11px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.actu-submit {
+  flex: 1;
+  padding: 11px;
+  border: none;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.actu-submit:disabled {
+  opacity: 0.6;
+}

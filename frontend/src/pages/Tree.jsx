@@ -4,6 +4,7 @@ import { buildTreeLayout } from '../utils/buildTreeGenerations';
 import RelationForm from '../components/RelationForm';
 import PersonForm from '../components/PersonForm';
 import PersonDetail from '../components/PersonDetail';
+import AddChildToUnionForm from '../components/AddChildToUnionForm';
 import './Tree.css';
 
 function initials(firstName, lastName) {
@@ -21,16 +22,19 @@ function formatYears(birthDate, deathDate) {
 function Tree() {
   const [layout, setLayout] = useState(null);
   const [allPersons, setAllPersons] = useState([]);
+  const [allPartnerships, setAllPartnerships] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showRelationForm, setShowRelationForm] = useState(false);
   const [showPersonForm, setShowPersonForm] = useState(false);
+  const [showAddChildForm, setShowAddChildForm] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState(null);
 
   async function loadTree() {
     try {
       const data = await getFullTree();
       setAllPersons(data.persons);
+      setAllPartnerships(data.partnerships);
       setLayout(buildTreeLayout(data));
     } catch (err) {
       setError('Impossible de charger l\'arbre généalogique.');
@@ -58,6 +62,9 @@ function Tree() {
           </button>
           <button className="tree-add-btn" onClick={() => setShowRelationForm(true)}>
             + Relier deux personnes
+          </button>
+          <button className="tree-add-btn" onClick={() => setShowAddChildForm(true)}>
+            + Enfant d'une union
           </button>
         </div>
       </div>
@@ -130,6 +137,15 @@ function Tree() {
       {showPersonForm && (
         <PersonForm
           onClose={() => setShowPersonForm(false)}
+          onSuccess={loadTree}
+        />
+      )}
+
+      {showAddChildForm && (
+        <AddChildToUnionForm
+          persons={allPersons}
+          partnerships={allPartnerships}
+          onClose={() => setShowAddChildForm(false)}
           onSuccess={loadTree}
         />
       )}
