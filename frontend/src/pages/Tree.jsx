@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { getFullTree } from '../api/tree.api';
 import { buildTreeLayout } from '../utils/buildTreeGenerations';
 import RelationForm from '../components/RelationForm';
@@ -29,6 +29,14 @@ function Tree() {
   const [showPersonForm, setShowPersonForm] = useState(false);
   const [showAddChildForm, setShowAddChildForm] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState(null);
+  const [zoom, setZoom] = useState(1);
+  const canvasRef = useRef(null);
+
+  function handleWheel(e) {
+    if (!e.ctrlKey) return; // molette seule = scroll normal ; Ctrl+molette = zoom
+    e.preventDefault();
+    setZoom((z) => Math.min(1.5, Math.max(0.25, z - e.deltaY * 0.001)));
+  }
 
   async function loadTree() {
     try {
@@ -76,53 +84,74 @@ function Tree() {
       )}
 
       {!isEmpty && (
-        <div className="tree-canvas">
+        <div className="tree-canvas" ref={canvasRef} onWheel={handleWheel}>
           <div
             className="tree-canvas-inner"
-            style={{ width: layout.canvasWidth, height: layout.canvasHeight }}
+            style={{
+              width: layout.canvasWidth * zoom,
+              height: layout.canvasHeight * zoom,
+            }}
           >
-            <svg
-              className="tree-lines"
-              width={layout.canvasWidth}
-              height={layout.canvasHeight}
+            <div
+              style={{
+                width: layout.canvasWidth,
+                height: layout.canvasHeight,
+                transform: `scale(${zoom})`,
+                transformOrigin: 'top left',
+              }}
             >
-              {layout.marriageLines.map((line, idx) => (
-                <line
-                  key={`m-${idx}`}
-                  x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2}
-                  stroke="var(--copper)"
-                  strokeWidth="2"
-                />
-              ))}
-              {layout.descentSegments.map((seg, idx) => (
-                <line
-                  key={`d-${idx}`}
-                  x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2}
-                  stroke="rgba(28, 43, 36, 0.35)"
-                  strokeWidth="1.5"
-                />
-              ))}
-            </svg>
+              <svg
+                className="tree-lines"
+                width={layout.canvasWidth}
+                height={layout.canvasHeight}
+              >
+                {layout.marriageLines.map((line, idx) => (
+                  <line
+                    key={`m-${idx}`}
+                    x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2}
+                    stroke="var(--copper)"
+                    strokeWidth="2"
+                  />
+                ))}
+                {layout.descentSegments.map((seg, idx) => (
+                  <line
+                    key={`d-${idx}`}
+                    x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2}
+                    stroke="rgba(28, 43, 36, 0.35)"
+                    strokeWidth="1.5"
+                  />
+                ))}
+              </svg>
 
-            {layout.placedPersons.map((person) => {
-              const isDeceased = !!person.deathDate;
-              return (
-                <div
-                  key={person.id}
-                  className={`tree-card-abs ${isDeceased ? 'deceased' : ''}`}
-                  style={{ left: person.x, top: person.y }}
-                  onClick={() => setSelectedPerson(person)}
-                >
-                  <div className="tree-card-photo">{initials(person.firstName, person.lastName)}</div>
-                  <div className="tree-card-name">{person.firstName} {person.lastName}</div>
-                  <div className="tree-card-dates">{formatYears(person.birthDate, person.deathDate)}</div>
-                  {person.user?.memberNumber && (
-                    <div className="tree-card-tag">{person.user.memberNumber}</div>
-                  )}
-                </div>
-              );
-            })}
+              {layout.placedPersons.map((person) => {
+                const isDeceased = !!person.deathDate;
+                return (
+                  <div
+                    key={person.id}
+                    className={`tree-card-abs ${isDeceased ? 'deceased' : ''}`}
+                    style={{ left: person.x, top: person.y }}
+                    onClick={() => setSelectedPerson(person)}
+                  >
+                    <div className="tree-card-photo">{initials(person.firstName, person.lastName)}</div>
+                    <div className="tree-card-name">{person.firstName} {person.lastName}</div>
+                    <div className="tree-card-dates">{formatYears(person.birthDate, person.deathDate)}</div>
+                    {person.user?.memberNumber && (
+                      <div className="tree-card-tag">{person.user.memberNumber}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
+        </div>
+      )}
+
+      {!isEmpty && (
+        <div className="tree-zoom-controls">
+          <button onClick={() => setZoom((z) => Math.min(1.5, z + 0.15))}>+</button>
+          <div className="tree-zoom-value">{Math.round(zoom * 100)}%</div>
+          <button onClick={() => setZoom((z) => Math.max(0.25, z - 0.15))}>−</button>
+          <button onClick={() => setZoom(1)} title="Réinitialiser">⤢</button>
         </div>
       )}
 
