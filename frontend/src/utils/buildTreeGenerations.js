@@ -14,7 +14,7 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
     parentsOf.get(childId).push(parentId);
   });
 
-  // 1. Génération initiale de chaque personne (0 = racine, pas de parent connu)
+  // 1. Génération initiale (0 = racine, pas de parent connu)
   const generationOf = new Map();
   function computeGeneration(personId, visited = new Set()) {
     if (generationOf.has(personId)) return generationOf.get(personId);
@@ -31,22 +31,15 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
   }
   persons.forEach((p) => computeGeneration(p.id));
 
-  const partnerOf = new Map();
-  partnerships.forEach((p) => {
-    if (!personById.has(p.person1Id) || !personById.has(p.person2Id)) return;
-    if (!partnerOf.has(p.person1Id)) partnerOf.set(p.person1Id, []);
-    if (!partnerOf.has(p.person2Id)) partnerOf.set(p.person2Id, []);
-    partnerOf.get(p.person1Id).push(p.person2Id);
-    partnerOf.get(p.person2Id).push(p.person1Id);
-  });
+  const validPartnerships = partnerships.filter(
+    (p) => personById.has(p.person1Id) && personById.has(p.person2Id)
+  );
 
-  // 2. Aligne la génération des conjoints (toujours identique entre partenaires),
-  //    et répercute l'effet sur leurs descendants, jusqu'à stabilisation.
+  // 2. Aligne la génération des conjoints (toujours identique), répercuté sur les descendants
   for (let pass = 0; pass < 20; pass++) {
     let changed = false;
 
-    partnerships.forEach((p) => {
-      if (!personById.has(p.person1Id) || !personById.has(p.person2Id)) return;
+    validPartnerships.forEach((p) => {
       const g1 = generationOf.get(p.person1Id) ?? 0;
       const g2 = generationOf.get(p.person2Id) ?? 0;
       const maxGen = Math.max(g1, g2);
@@ -65,6 +58,35 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
     if (!changed) break;
   }
 
+  // 3. Union-Find : regroupe TOUTE une famille polygame (mari + toutes ses épouses)
+  //    en un seul ensemble connecté, même s'il y a 3, 4 épouses ou plus.
+  const parentUF = new Map();
+  function find(id) {
+    if (!parentUF.has(id)) parentUF.set(id, id);
+    let root = id;
+    while (parentUF.get(root) !== root) root = parentUF.get(root);
+    let curr = id;
+    while (parentUF.get(curr) !== root) {
+      const next = parentUF.get(curr);
+      parentUF.set(curr, root);
+      curr = next;
+    }
+    return root;
+  }
+  function union(a, b) {
+    const ra = find(a), rb = find(b);
+    if (ra !== rb) parentUF.set(ra, rb);
+  }
+  persons.forEach((p) => find(p.id));
+  validPartnerships.forEach((p) => union(p.person1Id, p.person2Id));
+
+  // Compte les unions de chaque personne pour repérer le "pivot" (l'époux commun)
+  const partnershipCountOf = new Map();
+  validPartnerships.forEach((p) => {
+    partnershipCountOf.set(p.person1Id, (partnershipCountOf.get(p.person1Id) || 0) + 1);
+    partnershipCountOf.set(p.person2Id, (partnershipCountOf.get(p.person2Id) || 0) + 1);
+  });
+
   const maxGen = Math.max(0, ...Array.from(generationOf.values()));
   const genGroups = [];
   const personToGroup = new Map();
@@ -72,27 +94,33 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
 
   for (let gen = 0; gen <= maxGen; gen++) {
     const peopleInGen = persons.filter((p) => generationOf.get(p.id) === gen);
-    const placed = new Set();
-    const groups = [];
+    const seenRoots = new Map(); // root -> group temporaire (liste de membres)
 
     peopleInGen.forEach((person) => {
-      if (placed.has(person.id)) return;
-      const partnerIds = (partnerOf.get(person.id) || []).filter(
-        (id) => generationOf.get(id) === gen && !placed.has(id)
-      );
+      const root = find(person.id);
+      if (!seenRoots.has(root)) seenRoots.set(root, []);
+      seenRoots.get(root).push(person);
+    });
+
+    const groups = [];
+    seenRoots.forEach((members) => {
       const groupId = `g${groupCounter++}`;
-      if (partnerIds.length > 0) {
-        placed.add(person.id);
-        placed.add(partnerIds[0]);
-        const partner = personById.get(partnerIds[0]);
-        groups.push({ id: groupId, members: [person, partner], childGroupIds: [] });
-        personToGroup.set(person.id, groupId);
-        personToGroup.set(partner.id, groupId);
-      } else {
-        placed.add(person.id);
-        groups.push({ id: groupId, members: [person], childGroupIds: [] });
-        personToGroup.set(person.id, groupId);
+
+      let orderedMembers = members;
+      if (members.length >= 3) {
+        // Repère le pivot (celui qui a le plus d'unions) et alterne les conjoints autour de lui
+        const pivot = members.reduce((best, m) =>
+          (partnershipCountOf.get(m.id) || 0) > (partnershipCountOf.get(best.id) || 0) ? m : best
+          , members[0]);
+        const others = members.filter((m) => m.id !== pivot.id);
+        const left = [];
+        const right = [];
+        others.forEach((m, idx) => (idx % 2 === 0 ? right.push(m) : left.push(m)));
+        orderedMembers = [...left.reverse(), pivot, ...right];
       }
+
+      groups.push({ id: groupId, members: orderedMembers, childGroupIds: [] });
+      orderedMembers.forEach((m) => personToGroup.set(m.id, groupId));
     });
 
     genGroups.push(groups);
@@ -101,7 +129,7 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
   const groupById = new Map();
   genGroups.forEach((groups) => groups.forEach((g) => groupById.set(g.id, g)));
 
-  // 3. Rattache chaque personne au groupe de son premier parent (parent "principal")
+  // 4. Rattache chaque personne au groupe de son premier parent connu
   persons.forEach((person) => {
     const parents = parentsOf.get(person.id);
     if (!parents || parents.length === 0) return;
@@ -115,10 +143,11 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
   });
 
   function groupWidth(group) {
-    return group.members.length === 2 ? CARD_WIDTH * 2 + COUPLE_GAP : CARD_WIDTH;
+    const n = group.members.length;
+    return n * CARD_WIDTH + (n - 1) * COUPLE_GAP;
   }
 
-  // 4. Largeur du sous-arbre de chaque groupe (calcul du bas vers le haut)
+  // 5. Largeur du sous-arbre (bas vers le haut)
   const subtreeWidth = new Map();
   function computeSubtreeWidth(groupId) {
     if (subtreeWidth.has(groupId)) return subtreeWidth.get(groupId);
@@ -141,7 +170,7 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
   }
   genGroups.forEach((groups) => groups.forEach((g) => computeSubtreeWidth(g.id)));
 
-  // 5. Positionnement du haut vers le bas
+  // 6. Positionnement du haut vers le bas
   const positions = new Map();
   const groupCenterX = new Map();
 
@@ -149,14 +178,12 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
     const group = groupById.get(groupId);
     groupCenterX.set(groupId, centerX);
 
-    if (group.members.length === 2) {
-      const totalWidth = CARD_WIDTH * 2 + COUPLE_GAP;
-      const startX = centerX - totalWidth / 2;
-      positions.set(group.members[0].id, { x: startX, y, width: CARD_WIDTH });
-      positions.set(group.members[1].id, { x: startX + CARD_WIDTH + COUPLE_GAP, y, width: CARD_WIDTH });
-    } else {
-      positions.set(group.members[0].id, { x: centerX - CARD_WIDTH / 2, y, width: CARD_WIDTH });
-    }
+    const totalWidth = groupWidth(group);
+    const startX = centerX - totalWidth / 2;
+    group.members.forEach((member, idx) => {
+      const x = startX + idx * (CARD_WIDTH + COUPLE_GAP);
+      positions.set(member.id, { x, y, width: CARD_WIDTH });
+    });
 
     const childIds = group.childGroupIds;
     if (childIds.length > 0) {
@@ -199,16 +226,29 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
   positions.forEach((pos) => { pos.x += shiftX; });
   groupCenterX.forEach((x, id) => groupCenterX.set(id, x + shiftX));
 
-  // --- Lignes de mariage : trait horizontal entre les deux membres d'un couple ---
+  // --- Lignes de mariage : relie le pivot à chacun de ses conjoints ---
   const marriageLines = [];
   genGroups.forEach((groups) => {
     groups.forEach((group) => {
-      if (group.members.length === 2) {
-        const p1 = positions.get(group.members[0].id);
-        const p2 = positions.get(group.members[1].id);
-        const y = p1.y + CARD_HEIGHT / 2;
-        marriageLines.push({ x1: p1.x + CARD_WIDTH, y1: y, x2: p2.x, y2: y });
-      }
+      if (group.members.length < 2) return;
+
+      const pivot = group.members.reduce((best, m) =>
+        (partnershipCountOf.get(m.id) || 0) > (partnershipCountOf.get(best.id) || 0) ? m : best
+        , group.members[0]);
+      const pivotPos = positions.get(pivot.id);
+      const y = pivotPos.y + CARD_HEIGHT / 2;
+
+      group.members.forEach((m) => {
+        if (m.id === pivot.id) return;
+        const mPos = positions.get(m.id);
+        const isRight = mPos.x > pivotPos.x;
+        marriageLines.push({
+          x1: isRight ? pivotPos.x + CARD_WIDTH : pivotPos.x,
+          y1: y,
+          x2: isRight ? mPos.x : mPos.x + CARD_WIDTH,
+          y2: y,
+        });
+      });
     });
   });
 
@@ -229,9 +269,9 @@ export function buildTreeLayout({ persons, parentChildRelations, partnerships })
       descentSegments.push({ x1: parentCenterX, y1: parentBottomY, x2: parentCenterX, y2: busY });
 
       if (childCenters.length > 1) {
-        const minX = Math.min(...childCenters);
-        const maxX = Math.max(...childCenters);
-        descentSegments.push({ x1: minX, y1: busY, x2: maxX, y2: busY });
+        const minXc = Math.min(...childCenters);
+        const maxXc = Math.max(...childCenters);
+        descentSegments.push({ x1: minXc, y1: busY, x2: maxXc, y2: busY });
       }
 
       childCenters.forEach((cx) => {
