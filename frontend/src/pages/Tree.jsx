@@ -25,7 +25,6 @@ function formatYears(birthDate, deathDate) {
 
 // -------------------------------------------------------------
 // Fonction qui construit les données enrichies pour une personne
-// (père, mère, conjoint)
 // -------------------------------------------------------------
 function getPersonExportData(person, persons, relations, partnerships) {
   // Trouver les parents
@@ -107,9 +106,35 @@ function Tree() {
   async function loadTree() {
     try {
       const data = await getFullTree();
-      setAllPersons(data.persons || []);
-      setAllPartnerships(data.partnerships || []);
-      setAllRelations(data.relations || []);
+      const persons = data.persons || [];
+      const partnerships = data.partnerships || [];
+
+      // Construire les relations parent-enfant à partir des données des personnes
+      const relations = [];
+      persons.forEach(person => {
+        // Relations où cette personne est parent
+        if (person.parentRelations) {
+          person.parentRelations.forEach(rel => {
+            relations.push({
+              parentId: person.id,
+              childId: rel.childId,
+            });
+          });
+        }
+        // Relations où cette personne est enfant
+        if (person.childRelations) {
+          person.childRelations.forEach(rel => {
+            relations.push({
+              parentId: rel.parentId,
+              childId: person.id,
+            });
+          });
+        }
+      });
+
+      setAllPersons(persons);
+      setAllPartnerships(partnerships);
+      setAllRelations(relations);
       setLayout(buildTreeLayout(data));
     } catch (err) {
       setError('Impossible de charger l\'arbre généalogique.');
@@ -122,9 +147,7 @@ function Tree() {
     loadTree();
   }, []);
 
-  // --- IMPORT EXCEL (appel backend) ---
-  // Si le backend n'est pas prêt, cette fonction échouera.
-  // Pour l'instant elle reste telle quelle, mais on pourrait la commenter.
+  // --- IMPORT EXCEL (simulé pour l'instant) ---
   async function handleImport() {
     if (!importFile) {
       setImportMessage({ type: 'error', text: 'Veuillez sélectionner un fichier Excel.' });
@@ -136,20 +159,13 @@ function Tree() {
       const data = await importFile.arrayBuffer();
       const workbook = XLSX.read(data, { type: 'array' });
       const personsSheet = workbook.Sheets['Personnes'];
-      const relationsSheet = workbook.Sheets['Relations'];
       if (!personsSheet) {
         throw new Error('La feuille "Personnes" est obligatoire.');
       }
       const persons = XLSX.utils.sheet_to_json(personsSheet);
-      const relations = relationsSheet ? XLSX.utils.sheet_to_json(relationsSheet) : [];
-
-      // Appel API (si tu as le backend)
-      // const result = await importExcel({ persons, relations });
-      // setImportMessage({ type: 'success', text: `Import réussi : ${result.imported} personnes importées.` });
-      // loadTree();
-
-      // Simuler un succès pour le test (à enlever quand le backend sera prêt)
-      setImportMessage({ type: 'success', text: 'Import simulé (backend non encore implémenté).' });
+      // Simulation d'import (à remplacer par un vrai appel backend)
+      setImportMessage({ type: 'success', text: `${persons.length} personnes importées (simulation).` });
+      loadTree();
     } catch (err) {
       setImportMessage({ type: 'error', text: err.message || 'Erreur lors de l\'import.' });
     } finally {
@@ -158,17 +174,23 @@ function Tree() {
     }
   }
 
-  // --- EXPORT EXCEL (génération locale, sans backend) ---
+  // --- EXPORT EXCEL (génération locale) ---
   async function handleExportExcel() {
     if (!allPersons.length) {
       setImportMessage({ type: 'error', text: 'Aucune personne à exporter.' });
       return;
     }
 
-    // Construire les données enrichies
-    const exportData = allPersons.map(person =>
-      getPersonExportData(person, allPersons, allRelations, allPartnerships)
-    );
+    // Construire les données enrichies et trier par nom
+    const exportData = allPersons
+      .map(person => getPersonExportData(person, allPersons, allRelations, allPartnerships))
+      .sort((a, b) => {
+        if (a.nom < b.nom) return -1;
+        if (a.nom > b.nom) return 1;
+        if (a.prenom < b.prenom) return -1;
+        if (a.prenom > b.prenom) return 1;
+        return 0;
+      });
 
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -178,16 +200,22 @@ function Tree() {
     saveAs(blob, 'arbre_genealogique.xlsx');
   }
 
-  // --- EXPORT PDF (génération locale, sans backend) ---
+  // --- EXPORT PDF (génération locale) ---
   function handleExportPDF() {
     if (!allPersons.length) {
       setImportMessage({ type: 'error', text: 'Aucune personne à exporter.' });
       return;
     }
 
-    const exportData = allPersons.map(person =>
-      getPersonExportData(person, allPersons, allRelations, allPartnerships)
-    );
+    const exportData = allPersons
+      .map(person => getPersonExportData(person, allPersons, allRelations, allPartnerships))
+      .sort((a, b) => {
+        if (a.nom < b.nom) return -1;
+        if (a.nom > b.nom) return 1;
+        if (a.prenom < b.prenom) return -1;
+        if (a.prenom > b.prenom) return 1;
+        return 0;
+      });
 
     const doc = new jsPDF('landscape', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -213,8 +241,8 @@ function Tree() {
       startY: 30,
       head: [['Prénom', 'Nom', 'Père', 'Mère', 'Conjoint(e)', 'Profession', 'Naissance', 'Décès', 'Biographie']],
       body: rows,
-      styles: { fontSize: 6 },
-      headStyles: { fillColor: [122, 139, 127] },
+      styles: { fontSize: 7, font: 'helvetica' },
+      headStyles: { fillColor: [122, 139, 127], fontStyle: 'bold', textColor: [255, 255, 255] },
       columnStyles: {
         0: { cellWidth: 18 },
         1: { cellWidth: 18 },
