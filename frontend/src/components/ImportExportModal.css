@@ -1,0 +1,91 @@
+.import-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.import-modal-content {
+  background: white;
+  border-radius: 12px;
+  padding: 32px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.import-modal-content h2 {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.import-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.import-section,
+.export-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.import-section h3,
+.export-section h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.import-section input {
+  padding: 8px;
+}
+
+.import-section button,
+.export-section button {
+  padding: 10px;
+  background: #7a8b7f;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.import-section button:disabled,
+.export-section button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.import-message {
+  padding: 10px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.import-message.success {
+  background: #d4edda;
+  color: #155724;
+}
+
+.import-message.error {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.import-modal-close {
+  margin-top: 16px;
+  padding: 10px;
+  background: #ccc;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  width: 100%;
+}

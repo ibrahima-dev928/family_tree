@@ -5,6 +5,10 @@ import RelationForm from '../components/RelationForm';
 import PersonForm from '../components/PersonForm';
 import PersonDetail from '../components/PersonDetail';
 import AddChildToUnionForm from '../components/AddChildToUnionForm';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import './Tree.css';
 
 function initials(firstName, lastName) {
@@ -32,8 +36,14 @@ function Tree() {
   const [zoom, setZoom] = useState(1);
   const canvasRef = useRef(null);
 
+  // Import/Export state
+  const [showImportExport, setShowImportExport] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importMessage, setImportMessage] = useState(null);
+
   function handleWheel(e) {
-    if (!e.ctrlKey) return; // molette seule = scroll normal ; Ctrl+molette = zoom
+    if (!e.ctrlKey) return;
     e.preventDefault();
     setZoom((z) => Math.min(1.5, Math.max(0.25, z - e.deltaY * 0.001)));
   }
@@ -55,6 +65,94 @@ function Tree() {
     loadTree();
   }, []);
 
+  // --- IMPORT EXCEL ---
+  async function handleImport() {
+    if (!importFile) {
+      setImportMessage({ type: 'error', text: 'Veuillez sélectionner un fichier Excel.' });
+      return;
+    }
+    setImportLoading(true);
+    setImportMessage(null);
+    try {
+      const data = await importFile.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      const personsSheet = workbook.Sheets['Personnes'];
+      const relationsSheet = workbook.Sheets['Relations'];
+      if (!personsSheet) {
+        throw new Error('La feuille "Personnes" est obligatoire.');
+      }
+      const persons = XLSX.utils.sheet_to_json(personsSheet);
+      const relations = relationsSheet ? XLSX.utils.sheet_to_json(relationsSheet) : [];
+
+      // Appel API (tu dois l'avoir dans api/import.api.js)
+      const { importExcel } = await import('../api/import.api');
+      const result = await importExcel({ persons, relations });
+      setImportMessage({ type: 'success', text: `Import réussi : ${result.imported} personnes importées, ${result.updated} mises à jour.` });
+      loadTree(); // recharger l'arbre
+    } catch (err) {
+      setImportMessage({ type: 'error', text: err.message || 'Erreur lors de l\'import.' });
+    } finally {
+      setImportLoading(false);
+      setImportFile(null);
+    }
+  }
+
+  // --- EXPORT EXCEL ---
+  async function handleExportExcel() {
+    try {
+      const { exportExcel } = await import('../api/import.api');
+      const blob = await exportExcel();
+      saveAs(blob, 'arbre_genealogique.xlsx');
+    } catch (err) {
+      setImportMessage({ type: 'error', text: 'Erreur lors de l\'export Excel.' });
+    }
+  }
+
+  // --- EXPORT PDF (frontend) ---
+  function handleExportPDF() {
+    if (!allPersons.length) {
+      setImportMessage({ type: 'error', text: 'Aucune personne à exporter.' });
+      return;
+    }
+
+    const doc = new jsPDF('landscape', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Titre
+    doc.setFontSize(18);
+    doc.text('Arbre généalogique', pageWidth / 2, 15, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text(`Exporté le ${new Date().toLocaleDateString('fr-FR')}`, pageWidth / 2, 22, { align: 'center' });
+
+    // Préparer les données des personnes
+    const rows = allPersons.map(p => [
+      p.firstName || '',
+      p.lastName || '',
+      p.birthDate ? new Date(p.birthDate).toLocaleDateString('fr-FR') : '',
+      p.deathDate ? new Date(p.deathDate).toLocaleDateString('fr-FR') : '',
+      p.occupation || '',
+      p.bio || '',
+    ]);
+
+    autoTable(doc, {
+      startY: 30,
+      head: [['Prénom', 'Nom', 'Naissance', 'Décès', 'Profession', 'Biographie']],
+      body: rows,
+      styles: { fontSize: 7 },
+      headStyles: { fillColor: [122, 139, 127] },
+      columnStyles: {
+        0: { cellWidth: 25 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 20 },
+        3: { cellWidth: 20 },
+        4: { cellWidth: 25 },
+        5: { cellWidth: 40 },
+      },
+    });
+
+    doc.save('arbre_genealogique.pdf');
+  }
+
   if (loading) return <p style={{ color: 'var(--sage)' }}>Chargement de l'arbre...</p>;
   if (error) return <p style={{ color: 'var(--seal)' }}>{error}</p>;
 
@@ -64,7 +162,7 @@ function Tree() {
     <div className="tree-page">
       <div className="tree-header">
         <h1>Arbre généalogique</h1>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <button className="tree-add-btn" onClick={() => setShowPersonForm(true)}>
             + Ajouter une personne
           </button>
@@ -73,6 +171,9 @@ function Tree() {
           </button>
           <button className="tree-add-btn" onClick={() => setShowAddChildForm(true)}>
             + Enfant d'une union
+          </button>
+          <button className="tree-add-btn tree-import-btn" onClick={() => setShowImportExport(true)}>
+            📂 Import / Export
           </button>
         </div>
       </div>
@@ -152,6 +253,46 @@ function Tree() {
           <div className="tree-zoom-value">{Math.round(zoom * 100)}%</div>
           <button onClick={() => setZoom((z) => Math.max(0.25, z - 0.15))}>−</button>
           <button onClick={() => setZoom(1)} title="Réinitialiser">⤢</button>
+        </div>
+      )}
+
+      {showImportExport && (
+        <div className="import-export-modal-overlay" onClick={() => setShowImportExport(false)}>
+          <div className="import-export-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Importer / Exporter</h2>
+            <div className="import-export-actions">
+              {/* Import Excel */}
+              <div className="import-section">
+                <h3>Importer un fichier Excel</h3>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => setImportFile(e.target.files[0])}
+                />
+                <button onClick={handleImport} disabled={importLoading || !importFile}>
+                  {importLoading ? 'Import en cours...' : 'Importer'}
+                </button>
+                {importMessage && (
+                  <p className={`import-message ${importMessage.type}`}>{importMessage.text}</p>
+                )}
+              </div>
+
+              {/* Export Excel */}
+              <div className="export-section">
+                <h3>Exporter en Excel</h3>
+                <button onClick={handleExportExcel}>Télécharger .xlsx</button>
+              </div>
+
+              {/* Export PDF */}
+              <div className="export-section">
+                <h3>Exporter en PDF</h3>
+                <button onClick={handleExportPDF}>Télécharger .pdf</button>
+              </div>
+            </div>
+            <button className="import-export-close" onClick={() => setShowImportExport(false)}>
+              Fermer
+            </button>
+          </div>
         </div>
       )}
 
