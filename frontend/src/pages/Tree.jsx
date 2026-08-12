@@ -5,7 +5,6 @@ import RelationForm from '../components/RelationForm';
 import PersonForm from '../components/PersonForm';
 import PersonDetail from '../components/PersonDetail';
 import AddChildToUnionForm from '../components/AddChildToUnionForm';
-import { importExcel, exportExcel } from '../api/import.api';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
@@ -24,10 +23,58 @@ function formatYears(birthDate, deathDate) {
   return birthDate ? `Né(e) ${birthYear}` : '';
 }
 
+// -------------------------------------------------------------
+// Fonction qui construit les données enrichies pour une personne
+// (père, mère, conjoint)
+// -------------------------------------------------------------
+function getPersonExportData(person, persons, relations, partnerships) {
+  // Trouver les parents
+  const parents = (relations || []).filter(r => r.childId === person.id);
+
+  const fatherRel = parents.find(r => {
+    const parent = persons.find(p => p.id === r.parentId);
+    return parent && parent.gender === 'male';
+  });
+  const motherRel = parents.find(r => {
+    const parent = persons.find(p => p.id === r.parentId);
+    return parent && parent.gender === 'female';
+  });
+
+  const fatherName = fatherRel
+    ? persons.find(p => p.id === fatherRel.parentId)?.firstName + ' ' + persons.find(p => p.id === fatherRel.parentId)?.lastName
+    : 'Inconnu';
+  const motherName = motherRel
+    ? persons.find(p => p.id === motherRel.parentId)?.firstName + ' ' + persons.find(p => p.id === motherRel.parentId)?.lastName
+    : 'Inconnue';
+
+  // Trouver le conjoint
+  const partnership = (partnerships || []).find(p => p.person1Id === person.id || p.person2Id === person.id);
+  let spouseName = 'Célibataire';
+  if (partnership) {
+    const spouseId = partnership.person1Id === person.id ? partnership.person2Id : partnership.person1Id;
+    const spouse = persons.find(p => p.id === spouseId);
+    if (spouse) spouseName = `${spouse.firstName} ${spouse.lastName}`;
+  }
+
+  return {
+    prenom: person.firstName || '',
+    nom: person.lastName || '',
+    pere: fatherName,
+    mere: motherName,
+    conjoint: spouseName,
+    profession: person.occupation || '',
+    dateNaissance: person.birthDate ? new Date(person.birthDate).toLocaleDateString('fr-FR') : '',
+    dateDeces: person.deathDate ? new Date(person.deathDate).toLocaleDateString('fr-FR') : '',
+    biographie: person.bio || '',
+  };
+}
+
+// -------------------------------------------------------------
 function Tree() {
   const [layout, setLayout] = useState(null);
   const [allPersons, setAllPersons] = useState([]);
   const [allPartnerships, setAllPartnerships] = useState([]);
+  const [allRelations, setAllRelations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showRelationForm, setShowRelationForm] = useState(false);
@@ -43,7 +90,7 @@ function Tree() {
   const [importLoading, setImportLoading] = useState(false);
   const [importMessage, setImportMessage] = useState(null);
 
-  // Gestion du zoom avec correction passive
+  // Gestion du zoom (correction passive)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -60,8 +107,9 @@ function Tree() {
   async function loadTree() {
     try {
       const data = await getFullTree();
-      setAllPersons(data.persons);
-      setAllPartnerships(data.partnerships);
+      setAllPersons(data.persons || []);
+      setAllPartnerships(data.partnerships || []);
+      setAllRelations(data.relations || []);
       setLayout(buildTreeLayout(data));
     } catch (err) {
       setError('Impossible de charger l\'arbre généalogique.');
@@ -74,7 +122,9 @@ function Tree() {
     loadTree();
   }, []);
 
-  // --- IMPORT EXCEL ---
+  // --- IMPORT EXCEL (appel backend) ---
+  // Si le backend n'est pas prêt, cette fonction échouera.
+  // Pour l'instant elle reste telle quelle, mais on pourrait la commenter.
   async function handleImport() {
     if (!importFile) {
       setImportMessage({ type: 'error', text: 'Veuillez sélectionner un fichier Excel.' });
@@ -93,9 +143,13 @@ function Tree() {
       const persons = XLSX.utils.sheet_to_json(personsSheet);
       const relations = relationsSheet ? XLSX.utils.sheet_to_json(relationsSheet) : [];
 
-      const result = await importExcel({ persons, relations });
-      setImportMessage({ type: 'success', text: `Import réussi : ${result.imported} personnes importées, ${result.updated} mises à jour.` });
-      loadTree();
+      // Appel API (si tu as le backend)
+      // const result = await importExcel({ persons, relations });
+      // setImportMessage({ type: 'success', text: `Import réussi : ${result.imported} personnes importées.` });
+      // loadTree();
+
+      // Simuler un succès pour le test (à enlever quand le backend sera prêt)
+      setImportMessage({ type: 'success', text: 'Import simulé (backend non encore implémenté).' });
     } catch (err) {
       setImportMessage({ type: 'error', text: err.message || 'Erreur lors de l\'import.' });
     } finally {
@@ -104,22 +158,36 @@ function Tree() {
     }
   }
 
-  // --- EXPORT EXCEL ---
+  // --- EXPORT EXCEL (génération locale, sans backend) ---
   async function handleExportExcel() {
-    try {
-      const blob = await exportExcel();
-      saveAs(blob, 'arbre_genealogique.xlsx');
-    } catch (err) {
-      setImportMessage({ type: 'error', text: 'Erreur lors de l\'export Excel.' });
+    if (!allPersons.length) {
+      setImportMessage({ type: 'error', text: 'Aucune personne à exporter.' });
+      return;
     }
+
+    // Construire les données enrichies
+    const exportData = allPersons.map(person =>
+      getPersonExportData(person, allPersons, allRelations, allPartnerships)
+    );
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Arbre');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    const blob = new Blob([buffer], { type: 'application/octet-stream' });
+    saveAs(blob, 'arbre_genealogique.xlsx');
   }
 
-  // --- EXPORT PDF ---
+  // --- EXPORT PDF (génération locale, sans backend) ---
   function handleExportPDF() {
     if (!allPersons.length) {
       setImportMessage({ type: 'error', text: 'Aucune personne à exporter.' });
       return;
     }
+
+    const exportData = allPersons.map(person =>
+      getPersonExportData(person, allPersons, allRelations, allPartnerships)
+    );
 
     const doc = new jsPDF('landscape', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -129,28 +197,34 @@ function Tree() {
     doc.setFontSize(10);
     doc.text(`Exporté le ${new Date().toLocaleDateString('fr-FR')}`, pageWidth / 2, 22, { align: 'center' });
 
-    const rows = allPersons.map(p => [
-      p.firstName || '',
-      p.lastName || '',
-      p.birthDate ? new Date(p.birthDate).toLocaleDateString('fr-FR') : '',
-      p.deathDate ? new Date(p.deathDate).toLocaleDateString('fr-FR') : '',
-      p.occupation || '',
-      p.bio || '',
+    const rows = exportData.map(item => [
+      item.prenom,
+      item.nom,
+      item.pere,
+      item.mere,
+      item.conjoint,
+      item.profession,
+      item.dateNaissance,
+      item.dateDeces,
+      item.biographie,
     ]);
 
     autoTable(doc, {
       startY: 30,
-      head: [['Prénom', 'Nom', 'Naissance', 'Décès', 'Profession', 'Biographie']],
+      head: [['Prénom', 'Nom', 'Père', 'Mère', 'Conjoint(e)', 'Profession', 'Naissance', 'Décès', 'Biographie']],
       body: rows,
-      styles: { fontSize: 7 },
+      styles: { fontSize: 6 },
       headStyles: { fillColor: [122, 139, 127] },
       columnStyles: {
-        0: { cellWidth: 25 },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 20 },
-        3: { cellWidth: 20 },
-        4: { cellWidth: 25 },
-        5: { cellWidth: 40 },
+        0: { cellWidth: 18 },
+        1: { cellWidth: 18 },
+        2: { cellWidth: 18 },
+        3: { cellWidth: 18 },
+        4: { cellWidth: 20 },
+        5: { cellWidth: 18 },
+        6: { cellWidth: 15 },
+        7: { cellWidth: 15 },
+        8: { cellWidth: 30 },
       },
     });
 
