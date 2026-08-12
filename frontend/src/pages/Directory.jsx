@@ -17,12 +17,12 @@ function formatBirth(birthDate) {
 }
 
 // -------------------------------------------------------------
-// Fonction pour construire les données enrichies d'une personne
-// Utilise les relations (parentChildRelations) et partnerships
+// Fonction pour construire les données d'une personne
+// Utilise les relations (parentChildRelations) et (partnerships)
 // -------------------------------------------------------------
-function getPersonFullData(person, allPersons, parentChildRelations, partnerships) {
+function getPersonExportData(person, allPersons, relations, partnerships) {
   // 1. Parents
-  const parentRels = parentChildRelations.filter(r => r.childId === person.id);
+  const parentRels = relations.filter(r => r.childId === person.id);
   const parentNames = parentRels
     .map(r => {
       const parent = allPersons.find(p => p.id === r.parentId);
@@ -31,7 +31,7 @@ function getPersonFullData(person, allPersons, parentChildRelations, partnership
     .filter(Boolean);
   const parentsStr = parentNames.length > 0 ? parentNames.join(' & ') : 'Inconnu(s)';
 
-  // 2. Conjoint(s) (unions)
+  // 2. Conjoint(s)
   const partnerRels = partnerships.filter(p => p.person1Id === person.id || p.person2Id === person.id);
   const partnerNames = partnerRels
     .map(p => {
@@ -42,8 +42,8 @@ function getPersonFullData(person, allPersons, parentChildRelations, partnership
     .filter(Boolean);
   const conjointStr = partnerNames.length > 0 ? partnerNames.join(' & ') : 'Célibataire';
 
-  // 3. Enfants (personnes dont ce person est parent)
-  const childRels = parentChildRelations.filter(r => r.parentId === person.id);
+  // 3. Enfants
+  const childRels = relations.filter(r => r.parentId === person.id);
   const childNames = childRels
     .map(r => {
       const child = allPersons.find(p => p.id === r.childId);
@@ -53,11 +53,11 @@ function getPersonFullData(person, allPersons, parentChildRelations, partnership
   const enfantsStr = childNames.length > 0 ? childNames.join(' & ') : 'Aucun enfant';
   const nbEnfants = childNames.length;
 
-  // 4. Frères et sœurs (personnes partageant au moins un parent)
+  // 4. Frères et sœurs (partagent au moins un parent)
   const parentIds = parentRels.map(r => r.parentId);
   const siblingIds = new Set();
   parentIds.forEach(pid => {
-    parentChildRelations
+    relations
       .filter(r => r.parentId === pid && r.childId !== person.id)
       .forEach(r => siblingIds.add(r.childId));
   });
@@ -90,7 +90,7 @@ function Directory() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const [fullData, setFullData] = useState(null); // { persons, parentChildRelations, partnerships }
+  const [fullData, setFullData] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -106,20 +106,23 @@ function Directory() {
     load();
   }, []);
 
-  // Charger les données complètes pour l'export
   useEffect(() => {
     async function loadFullData() {
       try {
         const treeData = await getFullTree();
+        console.log('📦 Données reçues de getFullTree:', {
+          persons: treeData.persons?.length,
+          relations: treeData.parentChildRelations?.length,
+          partnerships: treeData.partnerships?.length,
+        });
+        // Petit test pour vérifier une relation
+        if (treeData.parentChildRelations && treeData.parentChildRelations.length > 0) {
+          console.log('🔗 Exemple de relation:', treeData.parentChildRelations[0]);
+        }
         setFullData({
           persons: treeData.persons || [],
           parentChildRelations: treeData.parentChildRelations || [],
           partnerships: treeData.partnerships || [],
-        });
-        console.log('📊 Données complètes chargées:', {
-          persons: treeData.persons?.length,
-          relations: treeData.parentChildRelations?.length,
-          partnerships: treeData.partnerships?.length,
         });
       } catch (err) {
         console.warn('Erreur chargement données complètes', err);
@@ -133,12 +136,24 @@ function Directory() {
     return fullName.includes(search.toLowerCase());
   });
 
-  // --- Fonction d'export enrichie ---
+  // --- Construction des données exportées ---
   function buildExportData() {
     if (!fullData) return [];
     const { persons: allPersons, parentChildRelations, partnerships } = fullData;
+
+    // Log du nombre de relations avant traitement
+    console.log(`👥 ${allPersons.length} personnes, ${parentChildRelations.length} relations, ${partnerships.length} unions`);
+
+    // Pour une personne de test (AISSATOU BOBBO par exemple), afficher ses relations
+    const testPerson = allPersons.find(p => p.firstName === 'AISSATOU' && p.lastName === 'BOBBO');
+    if (testPerson) {
+      const rels = parentChildRelations.filter(r => r.childId === testPerson.id);
+      console.log(`🧪 Pour ${testPerson.firstName} ${testPerson.lastName}, ${rels.length} relations parentales trouvées.`);
+      console.log('Rels:', rels);
+    }
+
     return allPersons
-      .map(person => getPersonFullData(person, allPersons, parentChildRelations, partnerships))
+      .map(person => getPersonExportData(person, allPersons, parentChildRelations, partnerships))
       .sort((a, b) => {
         if (a.nom < b.nom) return -1;
         if (a.nom > b.nom) return 1;
