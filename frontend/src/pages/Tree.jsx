@@ -1,11 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
 import { getFullTree } from '../api/tree.api';
-import { getRelations } from '../api/persons.api';
 import { buildTreeLayout } from '../utils/buildTreeGenerations';
 import RelationForm from '../components/RelationForm';
 import PersonForm from '../components/PersonForm';
 import PersonDetail from '../components/PersonDetail';
 import AddChildToUnionForm from '../components/AddChildToUnionForm';
+import { importExcel, exportExcel } from '../api/import.api';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
@@ -24,65 +24,73 @@ function formatYears(birthDate, deathDate) {
   return birthDate ? `Né(e) ${birthYear}` : '';
 }
 
-// =========================================================
-// Fonction qui construit les données enrichies pour une personne
-// Utilise la liste des relations (parentId → childId)
-// =========================================================
-function getPersonExportData(person, persons, partnerships, relations) {
-  // Trouver les relations où cette personne est enfant
+// -------------------------------------------------------------
+// Fonction pour construire les données d'export (excel/pdf) d'une personne
+// Utilise les relations (parentChildRelations) et partnerships
+// -------------------------------------------------------------
+function getPersonExportData(person, allPersons, relations, partnerships) {
+  // Parents
   const parentRels = relations.filter(r => r.childId === person.id);
-
-  // Récupérer les noms des parents
   const parentNames = parentRels
     .map(r => {
-      const parent = persons.find(p => p.id === r.parentId);
+      const parent = allPersons.find(p => p.id === r.parentId);
       return parent ? `${parent.firstName} ${parent.lastName}` : null;
     })
     .filter(Boolean);
+  const parentsStr = parentNames.length > 0 ? parentNames.join(' & ') : 'Inconnu(s)';
 
-  let parentsStr = 'Inconnu(s)';
-  let fatherName = 'Inconnu';
-  let motherName = 'Inconnue';
+  // Conjoint
+  const partnerRels = partnerships.filter(p => p.person1Id === person.id || p.person2Id === person.id);
+  const partnerNames = partnerRels
+    .map(p => {
+      const partnerId = p.person1Id === person.id ? p.person2Id : p.person1Id;
+      const partner = allPersons.find(p => p.id === partnerId);
+      return partner ? `${partner.firstName} ${partner.lastName}` : null;
+    })
+    .filter(Boolean);
+  const conjointStr = partnerNames.length > 0 ? partnerNames.join(' & ') : 'Célibataire';
 
-  if (parentNames.length > 0) {
-    parentsStr = parentNames.join(' & ');
+  // Enfants
+  const childRels = relations.filter(r => r.parentId === person.id);
+  const childNames = childRels
+    .map(r => {
+      const child = allPersons.find(p => p.id === r.childId);
+      return child ? `${child.firstName} ${child.lastName}` : null;
+    })
+    .filter(Boolean);
+  const enfantsStr = childNames.length > 0 ? childNames.join(' & ') : 'Aucun enfant';
 
-    // Essayer de différencier père et mère (si le genre est disponible)
-    const father = parentRels
-      .map(r => persons.find(p => p.id === r.parentId))
-      .find(p => p && p.gender === 'male');
-    const mother = parentRels
-      .map(r => persons.find(p => p.id === r.parentId))
-      .find(p => p && p.gender === 'female');
-
-    if (father) fatherName = `${father.firstName} ${father.lastName}`;
-    if (mother) motherName = `${mother.firstName} ${mother.lastName}`;
-  }
-
-  // Trouver le conjoint
-  const partnership = partnerships.find(p => p.person1Id === person.id || p.person2Id === person.id);
-  let spouseName = 'Célibataire';
-  if (partnership) {
-    const spouseId = partnership.person1Id === person.id ? partnership.person2Id : partnership.person1Id;
-    const spouse = persons.find(p => p.id === spouseId);
-    if (spouse) spouseName = `${spouse.firstName} ${spouse.lastName}`;
-  }
+  // Frères et sœurs
+  const parentIds = parentRels.map(r => r.parentId);
+  const siblingIds = new Set();
+  parentIds.forEach(pid => {
+    relations
+      .filter(r => r.parentId === pid && r.childId !== person.id)
+      .forEach(r => siblingIds.add(r.childId));
+  });
+  const siblingNames = Array.from(siblingIds)
+    .map(id => {
+      const sib = allPersons.find(p => p.id === id);
+      return sib ? `${sib.firstName} ${sib.lastName}` : null;
+    })
+    .filter(Boolean);
+  const freresSoeursStr = siblingNames.length > 0 ? siblingNames.join(' & ') : 'Aucun(e)';
 
   return {
     prenom: person.firstName || '',
     nom: person.lastName || '',
-    parents: parentsStr,
-    pere: fatherName,
-    mere: motherName,
-    conjoint: spouseName,
-    profession: person.occupation || '',
     dateNaissance: person.birthDate ? new Date(person.birthDate).toLocaleDateString('fr-FR') : '',
-    dateDeces: person.deathDate ? new Date(person.deathDate).toLocaleDateString('fr-FR') : '',
+    profession: person.occupation || '',
+    parents: parentsStr,
+    conjoint: conjointStr,
+    enfants: enfantsStr,
+    freresSoeurs: freresSoeursStr,
     biographie: person.bio || '',
+    dateDeces: person.deathDate ? new Date(person.deathDate).toLocaleDateString('fr-FR') : '',
   };
 }
 
-// =========================================================
+// -------------------------------------------------------------
 function Tree() {
   const [layout, setLayout] = useState(null);
   const [allPersons, setAllPersons] = useState([]);
@@ -97,11 +105,13 @@ function Tree() {
   const [zoom, setZoom] = useState(1);
   const canvasRef = useRef(null);
 
+  // Import/Export state
   const [showImportExport, setShowImportExport] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importMessage, setImportMessage] = useState(null);
 
+  // Gestion du zoom
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -116,24 +126,14 @@ function Tree() {
 
   async function loadTree() {
     try {
-      // Charger l'arbre et les relations en parallèle
-      const [treeData, relationsData] = await Promise.all([
-        getFullTree(),
-        getRelations().catch((err) => {
-          console.warn('⚠️ getRelations a échoué:', err);
-          return [];
-        })
-      ]);
-
+      const treeData = await getFullTree();
       const persons = treeData.persons || [];
       const partnerships = treeData.partnerships || [];
-
-      console.log('📊 Relations reçues depuis l\'API:', relationsData.length);
-      console.log('📊 Exemple de relation:', relationsData[0]);
+      const relations = treeData.parentChildRelations || [];
 
       setAllPersons(persons);
       setAllPartnerships(partnerships);
-      setAllRelations(relationsData);
+      setAllRelations(relations);
       setLayout(buildTreeLayout(treeData));
     } catch (err) {
       console.error('❌ Erreur de chargement:', err);
@@ -147,6 +147,7 @@ function Tree() {
     loadTree();
   }, []);
 
+  // --- IMPORT EXCEL (réel) ---
   async function handleImport() {
     if (!importFile) {
       setImportMessage({ type: 'error', text: 'Veuillez sélectionner un fichier Excel.' });
@@ -158,14 +159,26 @@ function Tree() {
       const data = await importFile.arrayBuffer();
       const workbook = XLSX.read(data, { type: 'array' });
       const personsSheet = workbook.Sheets['Personnes'];
+      const relationsSheet = workbook.Sheets['Relations'];
       if (!personsSheet) {
         throw new Error('La feuille "Personnes" est obligatoire.');
       }
       const persons = XLSX.utils.sheet_to_json(personsSheet);
-      setImportMessage({ type: 'success', text: `${persons.length} personnes importées (simulation).` });
-      loadTree();
+      const relations = relationsSheet ? XLSX.utils.sheet_to_json(relationsSheet) : [];
+
+      // 🔹 Appel réel à l'API
+      const result = await importExcel({ persons, relations });
+      setImportMessage({
+        type: 'success',
+        text: `Import réussi : ${result.imported} personnes importées, ${result.updated} mises à jour.`
+      });
+      loadTree(); // recharger l'arbre
     } catch (err) {
-      setImportMessage({ type: 'error', text: err.message || 'Erreur lors de l\'import.' });
+      console.error(err);
+      setImportMessage({
+        type: 'error',
+        text: err.message || 'Erreur lors de l\'import.'
+      });
     } finally {
       setImportLoading(false);
       setImportFile(null);
@@ -180,13 +193,12 @@ function Tree() {
     }
 
     const exportData = allPersons
-      .map(person => getPersonExportData(person, allPersons, allPartnerships, allRelations))
+      .map(person => getPersonExportData(person, allPersons, allRelations, allPartnerships))
       .sort((a, b) => {
-        // Tri alphabétique par prénom
-        if (a.prenom < b.prenom) return -1;
-        if (a.prenom > b.prenom) return 1;
         if (a.nom < b.nom) return -1;
         if (a.nom > b.nom) return 1;
+        if (a.prenom < b.prenom) return -1;
+        if (a.prenom > b.prenom) return 1;
         return 0;
       });
 
@@ -206,12 +218,12 @@ function Tree() {
     }
 
     const exportData = allPersons
-      .map(person => getPersonExportData(person, allPersons, allPartnerships, allRelations))
+      .map(person => getPersonExportData(person, allPersons, allRelations, allPartnerships))
       .sort((a, b) => {
-        if (a.prenom < b.prenom) return -1;
-        if (a.prenom > b.prenom) return 1;
         if (a.nom < b.nom) return -1;
         if (a.nom > b.nom) return 1;
+        if (a.prenom < b.prenom) return -1;
+        if (a.prenom > b.prenom) return 1;
         return 0;
       });
 
@@ -226,29 +238,33 @@ function Tree() {
     const rows = exportData.map(item => [
       item.prenom,
       item.nom,
+      item.dateNaissance,
+      item.profession,
       item.parents,
       item.conjoint,
-      item.profession,
-      item.dateNaissance,
-      item.dateDeces,
+      item.enfants,
+      item.freresSoeurs,
       item.biographie,
+      item.dateDeces,
     ]);
 
     autoTable(doc, {
       startY: 30,
-      head: [['Prénom', 'Nom', 'Parents', 'Conjoint(e)', 'Profession', 'Naissance', 'Décès', 'Biographie']],
+      head: [['Prénom', 'Nom', 'Naissance', 'Profession', 'Parents', 'Conjoint(e)', 'Enfants', 'Frères/Soeurs', 'Biographie', 'Décès']],
       body: rows,
       styles: { fontSize: 7, font: 'helvetica' },
       headStyles: { fillColor: [122, 139, 127], fontStyle: 'bold', textColor: [255, 255, 255] },
       columnStyles: {
         0: { cellWidth: 20 },
         1: { cellWidth: 20 },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 25 },
-        4: { cellWidth: 20 },
-        5: { cellWidth: 18 },
-        6: { cellWidth: 18 },
-        7: { cellWidth: 35 },
+        2: { cellWidth: 18 },
+        3: { cellWidth: 22 },
+        4: { cellWidth: 25 },
+        5: { cellWidth: 25 },
+        6: { cellWidth: 25 },
+        7: { cellWidth: 25 },
+        8: { cellWidth: 30 },
+        9: { cellWidth: 18 },
       },
     });
 
