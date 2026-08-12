@@ -23,31 +23,34 @@ function formatYears(birthDate, deathDate) {
   return birthDate ? `Né(e) ${birthYear}` : '';
 }
 
-// -------------------------------------------------------------
-// Fonction qui construit les données enrichies pour une personne
-// -------------------------------------------------------------
-function getPersonExportData(person, persons, relations, partnerships) {
-  // Trouver les parents
-  const parents = (relations || []).filter(r => r.childId === person.id);
+// =========================================================
+// Fonction pour récupérer les données d'export d'une personne
+// Utilise directement person.parentRelations (comme dans PersonDetail)
+// =========================================================
+function getPersonExportData(person, persons, partnerships) {
+  // Récupérer les parents depuis parentRelations
+  const parentRels = person.parentRelations || [];
+  let fatherName = 'Inconnu';
+  let motherName = 'Inconnue';
+  let parentsList = [];
 
-  const fatherRel = parents.find(r => {
-    const parent = persons.find(p => p.id === r.parentId);
-    return parent && parent.gender === 'male';
-  });
-  const motherRel = parents.find(r => {
-    const parent = persons.find(p => p.id === r.parentId);
-    return parent && parent.gender === 'female';
+  parentRels.forEach(rel => {
+    const parent = rel.parent;
+    if (parent) {
+      parentsList.push(`${parent.firstName} ${parent.lastName}`);
+      if (parent.gender === 'male') {
+        fatherName = `${parent.firstName} ${parent.lastName}`;
+      } else if (parent.gender === 'female') {
+        motherName = `${parent.firstName} ${parent.lastName}`;
+      }
+    }
   });
 
-  const fatherName = fatherRel
-    ? persons.find(p => p.id === fatherRel.parentId)?.firstName + ' ' + persons.find(p => p.id === fatherRel.parentId)?.lastName
-    : 'Inconnu';
-  const motherName = motherRel
-    ? persons.find(p => p.id === motherRel.parentId)?.firstName + ' ' + persons.find(p => p.id === motherRel.parentId)?.lastName
-    : 'Inconnue';
+  // Si on n'a pas de genre, on affiche tous les parents
+  const parentsStr = parentsList.length > 0 ? parentsList.join(' & ') : 'Inconnu(s)';
 
   // Trouver le conjoint
-  const partnership = (partnerships || []).find(p => p.person1Id === person.id || p.person2Id === person.id);
+  const partnership = partnerships.find(p => p.person1Id === person.id || p.person2Id === person.id);
   let spouseName = 'Célibataire';
   if (partnership) {
     const spouseId = partnership.person1Id === person.id ? partnership.person2Id : partnership.person1Id;
@@ -58,6 +61,7 @@ function getPersonExportData(person, persons, relations, partnerships) {
   return {
     prenom: person.firstName || '',
     nom: person.lastName || '',
+    parents: parentsStr,
     pere: fatherName,
     mere: motherName,
     conjoint: spouseName,
@@ -68,12 +72,11 @@ function getPersonExportData(person, persons, relations, partnerships) {
   };
 }
 
-// -------------------------------------------------------------
+// =========================================================
 function Tree() {
   const [layout, setLayout] = useState(null);
   const [allPersons, setAllPersons] = useState([]);
   const [allPartnerships, setAllPartnerships] = useState([]);
-  const [allRelations, setAllRelations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showRelationForm, setShowRelationForm] = useState(false);
@@ -106,35 +109,8 @@ function Tree() {
   async function loadTree() {
     try {
       const data = await getFullTree();
-      const persons = data.persons || [];
-      const partnerships = data.partnerships || [];
-
-      // Construire les relations parent-enfant à partir des données des personnes
-      const relations = [];
-      persons.forEach(person => {
-        // Relations où cette personne est parent
-        if (person.parentRelations) {
-          person.parentRelations.forEach(rel => {
-            relations.push({
-              parentId: person.id,
-              childId: rel.childId,
-            });
-          });
-        }
-        // Relations où cette personne est enfant
-        if (person.childRelations) {
-          person.childRelations.forEach(rel => {
-            relations.push({
-              parentId: rel.parentId,
-              childId: person.id,
-            });
-          });
-        }
-      });
-
-      setAllPersons(persons);
-      setAllPartnerships(partnerships);
-      setAllRelations(relations);
+      setAllPersons(data.persons || []);
+      setAllPartnerships(data.partnerships || []);
       setLayout(buildTreeLayout(data));
     } catch (err) {
       setError('Impossible de charger l\'arbre généalogique.');
@@ -147,7 +123,7 @@ function Tree() {
     loadTree();
   }, []);
 
-  // --- IMPORT EXCEL (simulé pour l'instant) ---
+  // --- IMPORT EXCEL (simulé) ---
   async function handleImport() {
     if (!importFile) {
       setImportMessage({ type: 'error', text: 'Veuillez sélectionner un fichier Excel.' });
@@ -181,10 +157,11 @@ function Tree() {
       return;
     }
 
-    // Construire les données enrichies et trier par nom
+    // Construire les données enrichies
     const exportData = allPersons
-      .map(person => getPersonExportData(person, allPersons, allRelations, allPartnerships))
+      .map(person => getPersonExportData(person, allPersons, allPartnerships))
       .sort((a, b) => {
+        // Tri par nom, puis prénom
         if (a.nom < b.nom) return -1;
         if (a.nom > b.nom) return 1;
         if (a.prenom < b.prenom) return -1;
@@ -208,7 +185,7 @@ function Tree() {
     }
 
     const exportData = allPersons
-      .map(person => getPersonExportData(person, allPersons, allRelations, allPartnerships))
+      .map(person => getPersonExportData(person, allPersons, allPartnerships))
       .sort((a, b) => {
         if (a.nom < b.nom) return -1;
         if (a.nom > b.nom) return 1;
@@ -228,8 +205,7 @@ function Tree() {
     const rows = exportData.map(item => [
       item.prenom,
       item.nom,
-      item.pere,
-      item.mere,
+      item.parents,
       item.conjoint,
       item.profession,
       item.dateNaissance,
@@ -239,20 +215,19 @@ function Tree() {
 
     autoTable(doc, {
       startY: 30,
-      head: [['Prénom', 'Nom', 'Père', 'Mère', 'Conjoint(e)', 'Profession', 'Naissance', 'Décès', 'Biographie']],
+      head: [['Prénom', 'Nom', 'Parents', 'Conjoint(e)', 'Profession', 'Naissance', 'Décès', 'Biographie']],
       body: rows,
       styles: { fontSize: 7, font: 'helvetica' },
       headStyles: { fillColor: [122, 139, 127], fontStyle: 'bold', textColor: [255, 255, 255] },
       columnStyles: {
-        0: { cellWidth: 18 },
-        1: { cellWidth: 18 },
-        2: { cellWidth: 18 },
-        3: { cellWidth: 18 },
+        0: { cellWidth: 20 },
+        1: { cellWidth: 20 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 25 },
         4: { cellWidth: 20 },
         5: { cellWidth: 18 },
-        6: { cellWidth: 15 },
-        7: { cellWidth: 15 },
-        8: { cellWidth: 30 },
+        6: { cellWidth: 18 },
+        7: { cellWidth: 35 },
       },
     });
 
