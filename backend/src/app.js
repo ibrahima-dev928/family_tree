@@ -4,6 +4,8 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const env = require('./config/env');
 const { errorMiddleware, notFoundMiddleware } = require('./middlewares/error.middleware');
+const importController = require('./modules/import/import.controller');
+const exportController = require('./modules/import/export.controller');
 
 const app = express();
 
@@ -38,6 +40,8 @@ app.use('/api/validations', require('./modules/validations/validations.routes'))
 app.use('/api/events', require('./modules/events/events.routes'));
 app.use('/api/conversations', require('./modules/messaging/messaging.routes'));
 app.use('/api/notifications', require('./modules/notifications/notifications.routes'));
+app.post('/api/import', authenticate, importController.importExcel);
+app.get('/api/export', authenticate, exportController.exportExcel);
 
 // ---- 404 & gestion d'erreurs (toujours en dernier) ----
 app.use(notFoundMiddleware);
