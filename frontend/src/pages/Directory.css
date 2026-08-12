@@ -93,3 +93,26 @@
   color: var(--sage);
   background: rgba(122, 139, 127, 0.14);
 }
+
+.dir-export-btn {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.dir-export-btn:hover:not(:disabled) {
+  background: var(--paper-raised);
+  border-color: var(--copper);
+}
+
+.dir-export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
