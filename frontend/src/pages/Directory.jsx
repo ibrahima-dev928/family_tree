@@ -16,12 +16,8 @@ function formatBirth(birthDate) {
   return birthDate ? new Date(birthDate).getFullYear() : '?';
 }
 
-// -------------------------------------------------------------
-// Fonction pour construire les données d'une personne
-// Utilise les relations (parentChildRelations) et (partnerships)
-// -------------------------------------------------------------
 function getPersonExportData(person, allPersons, relations, partnerships) {
-  // 1. Parents
+  // --- Parents ---
   const parentRels = relations.filter(r => r.childId === person.id);
   const parentNames = parentRels
     .map(r => {
@@ -31,7 +27,7 @@ function getPersonExportData(person, allPersons, relations, partnerships) {
     .filter(Boolean);
   const parentsStr = parentNames.length > 0 ? parentNames.join(' & ') : 'Inconnu(s)';
 
-  // 2. Conjoint(s)
+  // --- Conjoint(s) ---
   const partnerRels = partnerships.filter(p => p.person1Id === person.id || p.person2Id === person.id);
   const partnerNames = partnerRels
     .map(p => {
@@ -42,7 +38,7 @@ function getPersonExportData(person, allPersons, relations, partnerships) {
     .filter(Boolean);
   const conjointStr = partnerNames.length > 0 ? partnerNames.join(' & ') : 'Célibataire';
 
-  // 3. Enfants
+  // --- Enfants ---
   const childRels = relations.filter(r => r.parentId === person.id);
   const childNames = childRels
     .map(r => {
@@ -51,9 +47,8 @@ function getPersonExportData(person, allPersons, relations, partnerships) {
     })
     .filter(Boolean);
   const enfantsStr = childNames.length > 0 ? childNames.join(' & ') : 'Aucun enfant';
-  const nbEnfants = childNames.length;
 
-  // 4. Frères et sœurs (partagent au moins un parent)
+  // --- Frères et sœurs ---
   const parentIds = parentRels.map(r => r.parentId);
   const siblingIds = new Set();
   parentIds.forEach(pid => {
@@ -69,22 +64,21 @@ function getPersonExportData(person, allPersons, relations, partnerships) {
     .filter(Boolean);
   const freresSoeursStr = siblingNames.length > 0 ? siblingNames.join(' & ') : 'Aucun(e)';
 
+  // --- Retour avec l'ordre des colonnes souhaité ---
   return {
     prenom: person.firstName || '',
     nom: person.lastName || '',
     dateNaissance: person.birthDate ? new Date(person.birthDate).toLocaleDateString('fr-FR') : '',
-    dateDeces: person.deathDate ? new Date(person.deathDate).toLocaleDateString('fr-FR') : '',
     profession: person.occupation || '',
     parents: parentsStr,
     conjoint: conjointStr,
     enfants: enfantsStr,
-    nbEnfants: nbEnfants,
     freresSoeurs: freresSoeursStr,
     biographie: person.bio || '',
+    dateDeces: person.deathDate ? new Date(person.deathDate).toLocaleDateString('fr-FR') : '',
   };
 }
 
-// -------------------------------------------------------------
 function Directory() {
   const [persons, setPersons] = useState([]);
   const [search, setSearch] = useState('');
@@ -110,15 +104,6 @@ function Directory() {
     async function loadFullData() {
       try {
         const treeData = await getFullTree();
-        console.log('📦 Données reçues de getFullTree:', {
-          persons: treeData.persons?.length,
-          relations: treeData.parentChildRelations?.length,
-          partnerships: treeData.partnerships?.length,
-        });
-        // Petit test pour vérifier une relation
-        if (treeData.parentChildRelations && treeData.parentChildRelations.length > 0) {
-          console.log('🔗 Exemple de relation:', treeData.parentChildRelations[0]);
-        }
         setFullData({
           persons: treeData.persons || [],
           parentChildRelations: treeData.parentChildRelations || [],
@@ -131,27 +116,14 @@ function Directory() {
     loadFullData();
   }, []);
 
-  const filtered = persons.filter((p) => {
+  const filtered = persons.filter(p => {
     const fullName = `${p.firstName} ${p.lastName}`.toLowerCase();
     return fullName.includes(search.toLowerCase());
   });
 
-  // --- Construction des données exportées ---
   function buildExportData() {
     if (!fullData) return [];
     const { persons: allPersons, parentChildRelations, partnerships } = fullData;
-
-    // Log du nombre de relations avant traitement
-    console.log(`👥 ${allPersons.length} personnes, ${parentChildRelations.length} relations, ${partnerships.length} unions`);
-
-    // Pour une personne de test (AISSATOU BOBBO par exemple), afficher ses relations
-    const testPerson = allPersons.find(p => p.firstName === 'AISSATOU' && p.lastName === 'BOBBO');
-    if (testPerson) {
-      const rels = parentChildRelations.filter(r => r.childId === testPerson.id);
-      console.log(`🧪 Pour ${testPerson.firstName} ${testPerson.lastName}, ${rels.length} relations parentales trouvées.`);
-      console.log('Rels:', rels);
-    }
-
     return allPersons
       .map(person => getPersonExportData(person, allPersons, parentChildRelations, partnerships))
       .sort((a, b) => {
@@ -163,10 +135,9 @@ function Directory() {
       });
   }
 
-  // --- EXPORT EXCEL ---
   async function handleExportExcel() {
     if (!fullData) {
-      alert('Les données ne sont pas encore prêtes, veuillez réessayer.');
+      alert('Les données ne sont pas encore prêtes.');
       return;
     }
     setExporting(true);
@@ -177,7 +148,6 @@ function Directory() {
         setExporting(false);
         return;
       }
-
       const workbook = XLSX.utils.book_new();
       const worksheet = XLSX.utils.json_to_sheet(exportData);
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Annuaire');
@@ -192,10 +162,9 @@ function Directory() {
     }
   }
 
-  // --- EXPORT PDF ---
   async function handleExportPDF() {
     if (!fullData) {
-      alert('Les données ne sont pas encore prêtes, veuillez réessayer.');
+      alert('Les données ne sont pas encore prêtes.');
       return;
     }
     setExporting(true);
@@ -219,18 +188,18 @@ function Directory() {
         item.prenom,
         item.nom,
         item.dateNaissance,
-        item.dateDeces,
         item.profession,
         item.parents,
         item.conjoint,
         item.enfants,
         item.freresSoeurs,
         item.biographie,
+        item.dateDeces,
       ]);
 
       autoTable(doc, {
         startY: 30,
-        head: [['Prénom', 'Nom', 'Naissance', 'Décès', 'Profession', 'Parents', 'Conjoint(e)', 'Enfants', 'Frères/Soeurs', 'Biographie']],
+        head: [['Prénom', 'Nom', 'Naissance', 'Profession', 'Parents', 'Conjoint(e)', 'Enfants', 'Frères/Soeurs', 'Biographie', 'Décès']],
         body: rows,
         styles: { fontSize: 6, font: 'helvetica' },
         headStyles: { fillColor: [122, 139, 127], fontStyle: 'bold', textColor: [255, 255, 255] },
@@ -238,13 +207,13 @@ function Directory() {
           0: { cellWidth: 15 },
           1: { cellWidth: 15 },
           2: { cellWidth: 14 },
-          3: { cellWidth: 14 },
-          4: { cellWidth: 18 },
+          3: { cellWidth: 18 },
+          4: { cellWidth: 20 },
           5: { cellWidth: 20 },
           6: { cellWidth: 20 },
           7: { cellWidth: 20 },
-          8: { cellWidth: 20 },
-          9: { cellWidth: 25 },
+          8: { cellWidth: 25 },
+          9: { cellWidth: 14 },
         },
       });
 
@@ -265,18 +234,10 @@ function Directory() {
         <h1>Annuaire familial</h1>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <span className="dir-count">{persons.length} membre{persons.length !== 1 ? 's' : ''}</span>
-          <button
-            className="dir-export-btn"
-            onClick={handleExportExcel}
-            disabled={exporting || !fullData}
-          >
+          <button className="dir-export-btn" onClick={handleExportExcel} disabled={exporting || !fullData}>
             📊 Excel
           </button>
-          <button
-            className="dir-export-btn"
-            onClick={handleExportPDF}
-            disabled={exporting || !fullData}
-          >
+          <button className="dir-export-btn" onClick={handleExportPDF} disabled={exporting || !fullData}>
             📄 PDF
           </button>
         </div>
@@ -295,22 +256,16 @@ function Directory() {
       )}
 
       <div className="dir-grid">
-        {filtered.map((person) => {
+        {filtered.map(person => {
           const isDeceased = !!person.deathDate;
           return (
-            <Link
-              to={`/person/${person.id}`}
-              key={person.id}
-              className={`dir-card ${isDeceased ? 'deceased' : ''}`}
-            >
+            <Link to={`/person/${person.id}`} key={person.id} className={`dir-card ${isDeceased ? 'deceased' : ''}`}>
               <div className="dir-avatar">{initials(person.firstName, person.lastName)}</div>
               <div className="dir-name">{person.firstName} {person.lastName}</div>
               <div className="dir-birth">
                 {isDeceased
                   ? `${formatBirth(person.birthDate)} – ${formatBirth(person.deathDate)}`
-                  : person.birthDate
-                    ? `Né(e) en ${formatBirth(person.birthDate)}`
-                    : ''}
+                  : person.birthDate ? `Né(e) en ${formatBirth(person.birthDate)}` : ''}
               </div>
               {person.user?.memberNumber ? (
                 <div className="dir-tag">{person.user.memberNumber}</div>
