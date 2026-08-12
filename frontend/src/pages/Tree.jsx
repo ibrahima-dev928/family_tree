@@ -5,9 +5,9 @@ import RelationForm from '../components/RelationForm';
 import PersonForm from '../components/PersonForm';
 import PersonDetail from '../components/PersonDetail';
 import AddChildToUnionForm from '../components/AddChildToUnionForm';
+import { importExcel, exportExcel } from '../api/import.api';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
-import { importExcel, exportExcel } from '../api/import.api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './Tree.css';
@@ -43,11 +43,30 @@ function Tree() {
   const [importLoading, setImportLoading] = useState(false);
   const [importMessage, setImportMessage] = useState(null);
 
+  // CORRECTION : utilisation d'un flag pour éviter l'erreur passive
+  const wheelHandler = useRef(null);
+
   function handleWheel(e) {
     if (!e.ctrlKey) return;
     e.preventDefault();
     setZoom((z) => Math.min(1.5, Math.max(0.25, z - e.deltaY * 0.001)));
   }
+
+  // Pour éviter l'erreur passive, on attache/détache l'événement manuellement
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const onWheel = (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setZoom((z) => Math.min(1.5, Math.max(0.25, z - e.deltaY * 0.001)));
+    };
+
+    // On attache l'événement avec { passive: false }
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', onWheel);
+  }, []);
 
   async function loadTree() {
     try {
@@ -85,11 +104,9 @@ function Tree() {
       const persons = XLSX.utils.sheet_to_json(personsSheet);
       const relations = relationsSheet ? XLSX.utils.sheet_to_json(relationsSheet) : [];
 
-      // Appel API (tu dois l'avoir dans api/import.api.js)
-      const { importExcel } = await import('../api/import.api');
       const result = await importExcel({ persons, relations });
       setImportMessage({ type: 'success', text: `Import réussi : ${result.imported} personnes importées, ${result.updated} mises à jour.` });
-      loadTree(); // recharger l'arbre
+      loadTree();
     } catch (err) {
       setImportMessage({ type: 'error', text: err.message || 'Erreur lors de l\'import.' });
     } finally {
@@ -101,7 +118,6 @@ function Tree() {
   // --- EXPORT EXCEL ---
   async function handleExportExcel() {
     try {
-      const { exportExcel } = await import('../api/import.api');
       const blob = await exportExcel();
       saveAs(blob, 'arbre_genealogique.xlsx');
     } catch (err) {
@@ -119,13 +135,11 @@ function Tree() {
     const doc = new jsPDF('landscape', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
 
-    // Titre
     doc.setFontSize(18);
     doc.text('Arbre généalogique', pageWidth / 2, 15, { align: 'center' });
     doc.setFontSize(10);
     doc.text(`Exporté le ${new Date().toLocaleDateString('fr-FR')}`, pageWidth / 2, 22, { align: 'center' });
 
-    // Préparer les données des personnes
     const rows = allPersons.map(p => [
       p.firstName || '',
       p.lastName || '',
@@ -163,7 +177,7 @@ function Tree() {
     <div className="tree-page">
       <div className="tree-header">
         <h1>Arbre généalogique</h1>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
           <button className="tree-add-btn" onClick={() => setShowPersonForm(true)}>
             + Ajouter une personne
           </button>
@@ -186,7 +200,7 @@ function Tree() {
       )}
 
       {!isEmpty && (
-        <div className="tree-canvas" ref={canvasRef} onWheel={handleWheel}>
+        <div className="tree-canvas" ref={canvasRef}>
           <div
             className="tree-canvas-inner"
             style={{
@@ -262,7 +276,6 @@ function Tree() {
           <div className="import-export-modal" onClick={(e) => e.stopPropagation()}>
             <h2>Importer / Exporter</h2>
             <div className="import-export-actions">
-              {/* Import Excel */}
               <div className="import-section">
                 <h3>Importer un fichier Excel</h3>
                 <input
@@ -278,13 +291,11 @@ function Tree() {
                 )}
               </div>
 
-              {/* Export Excel */}
               <div className="export-section">
                 <h3>Exporter en Excel</h3>
                 <button onClick={handleExportExcel}>Télécharger .xlsx</button>
               </div>
 
-              {/* Export PDF */}
               <div className="export-section">
                 <h3>Exporter en PDF</h3>
                 <button onClick={handleExportPDF}>Télécharger .pdf</button>
