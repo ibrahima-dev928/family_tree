@@ -17,7 +17,7 @@ function formatBirth(birthDate) {
 }
 
 function getPersonExportData(person, allPersons, relations, partnerships) {
-  // --- Parents ---
+  // Parents
   const parentRels = relations.filter(r => r.childId === person.id);
   const parentNames = parentRels
     .map(r => {
@@ -27,7 +27,7 @@ function getPersonExportData(person, allPersons, relations, partnerships) {
     .filter(Boolean);
   const parentsStr = parentNames.length > 0 ? parentNames.join(' & ') : 'Inconnu(s)';
 
-  // --- Conjoint(s) ---
+  // Conjoint(s)
   const partnerRels = partnerships.filter(p => p.person1Id === person.id || p.person2Id === person.id);
   const partnerNames = partnerRels
     .map(p => {
@@ -38,7 +38,7 @@ function getPersonExportData(person, allPersons, relations, partnerships) {
     .filter(Boolean);
   const conjointStr = partnerNames.length > 0 ? partnerNames.join(' & ') : 'Célibataire';
 
-  // --- Enfants ---
+  // Enfants
   const childRels = relations.filter(r => r.parentId === person.id);
   const childNames = childRels
     .map(r => {
@@ -48,7 +48,7 @@ function getPersonExportData(person, allPersons, relations, partnerships) {
     .filter(Boolean);
   const enfantsStr = childNames.length > 0 ? childNames.join(' & ') : 'Aucun enfant';
 
-  // --- Frères et sœurs ---
+  // Frères et sœurs
   const parentIds = parentRels.map(r => r.parentId);
   const siblingIds = new Set();
   parentIds.forEach(pid => {
@@ -64,17 +64,14 @@ function getPersonExportData(person, allPersons, relations, partnerships) {
     .filter(Boolean);
   const freresSoeursStr = siblingNames.length > 0 ? siblingNames.join(' & ') : 'Aucun(e)';
 
-  // --- Retour avec l'ordre des colonnes souhaité ---
   return {
     prenom: person.firstName || '',
     nom: person.lastName || '',
     dateNaissance: person.birthDate ? new Date(person.birthDate).toLocaleDateString('fr-FR') : '',
-    profession: person.occupation || '',
     parents: parentsStr,
     conjoint: conjointStr,
     enfants: enfantsStr,
     freresSoeurs: freresSoeursStr,
-    biographie: person.bio || '',
     dateDeces: person.deathDate ? new Date(person.deathDate).toLocaleDateString('fr-FR') : '',
   };
 }
@@ -188,32 +185,28 @@ function Directory() {
         item.prenom,
         item.nom,
         item.dateNaissance,
-        item.profession,
         item.parents,
         item.conjoint,
         item.enfants,
         item.freresSoeurs,
-        item.biographie,
         item.dateDeces,
       ]);
 
       autoTable(doc, {
         startY: 30,
-        head: [['Prénom', 'Nom', 'Naissance', 'Profession', 'Parents', 'Conjoint(e)', 'Enfants', 'Frères/Soeurs', 'Biographie', 'Décès']],
+        head: [['Prénom', 'Nom', 'Naissance', 'Parents', 'Conjoint(e)', 'Enfants', 'Frères/Soeurs', 'Décès']],
         body: rows,
-        styles: { fontSize: 6, font: 'helvetica' },
+        styles: { fontSize: 7, font: 'helvetica' },
         headStyles: { fillColor: [122, 139, 127], fontStyle: 'bold', textColor: [255, 255, 255] },
         columnStyles: {
-          0: { cellWidth: 15 },
-          1: { cellWidth: 15 },
-          2: { cellWidth: 14 },
-          3: { cellWidth: 18 },
-          4: { cellWidth: 20 },
-          5: { cellWidth: 20 },
-          6: { cellWidth: 20 },
-          7: { cellWidth: 20 },
-          8: { cellWidth: 25 },
-          9: { cellWidth: 14 },
+          0: { cellWidth: 20 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 18 },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 25 },
+          5: { cellWidth: 25 },
+          6: { cellWidth: 25 },
+          7: { cellWidth: 18 },
         },
       });
 
