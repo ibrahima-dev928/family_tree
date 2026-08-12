@@ -40,7 +40,8 @@ app.use('/api/validations', require('./modules/validations/validations.routes'))
 app.use('/api/events', require('./modules/events/events.routes'));
 app.use('/api/conversations', require('./modules/messaging/messaging.routes'));
 app.use('/api/notifications', require('./modules/notifications/notifications.routes'));
-app.post('/api/import', authenticate, importController.importExcel);
+//app.post('/api/import', authenticate, importController.importExcel);
+app.post('/api/import', authMiddleware, importController.importExcel);
 app.get('/api/export', authenticate, exportController.exportExcel);
 
 // ---- 404 & gestion d'erreurs (toujours en dernier) ----

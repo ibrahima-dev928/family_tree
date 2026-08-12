@@ -5,7 +5,7 @@ import RelationForm from '../components/RelationForm';
 import PersonForm from '../components/PersonForm';
 import PersonDetail from '../components/PersonDetail';
 import AddChildToUnionForm from '../components/AddChildToUnionForm';
-import { importExcel, exportExcel } from '../api/import.api';
+import { importExcel } from '../api/import.api';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
@@ -24,10 +24,7 @@ function formatYears(birthDate, deathDate) {
   return birthDate ? `Né(e) ${birthYear}` : '';
 }
 
-// -------------------------------------------------------------
-// Fonction pour construire les données d'export (excel/pdf) d'une personne
-// Utilise les relations (parentChildRelations) et partnerships
-// -------------------------------------------------------------
+// --- Fonction d'export (identique à avant) ---
 function getPersonExportData(person, allPersons, relations, partnerships) {
   // Parents
   const parentRels = relations.filter(r => r.childId === person.id);
@@ -60,7 +57,7 @@ function getPersonExportData(person, allPersons, relations, partnerships) {
     .filter(Boolean);
   const enfantsStr = childNames.length > 0 ? childNames.join(' & ') : 'Aucun enfant';
 
-  // Frères et sœurs
+  // Frères/sœurs
   const parentIds = parentRels.map(r => r.parentId);
   const siblingIds = new Set();
   parentIds.forEach(pid => {
@@ -90,7 +87,7 @@ function getPersonExportData(person, allPersons, relations, partnerships) {
   };
 }
 
-// -------------------------------------------------------------
+// --- Composant principal ---
 function Tree() {
   const [layout, setLayout] = useState(null);
   const [allPersons, setAllPersons] = useState([]);
@@ -105,13 +102,12 @@ function Tree() {
   const [zoom, setZoom] = useState(1);
   const canvasRef = useRef(null);
 
-  // Import/Export state
   const [showImportExport, setShowImportExport] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importMessage, setImportMessage] = useState(null);
 
-  // Gestion du zoom
+  // Zoom
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -147,7 +143,7 @@ function Tree() {
     loadTree();
   }, []);
 
-  // --- IMPORT EXCEL (réel) ---
+  // --- IMPORT ---
   async function handleImport() {
     if (!importFile) {
       setImportMessage({ type: 'error', text: 'Veuillez sélectionner un fichier Excel.' });
@@ -158,26 +154,41 @@ function Tree() {
     try {
       const data = await importFile.arrayBuffer();
       const workbook = XLSX.read(data, { type: 'array' });
-      const personsSheet = workbook.Sheets['Personnes'];
-      const relationsSheet = workbook.Sheets['Relations'];
-      if (!personsSheet) {
-        throw new Error('La feuille "Personnes" est obligatoire.');
+      const sheetNames = workbook.SheetNames;
+
+      // Chercher "Personnes" ou prendre la première feuille
+      let personsSheet = workbook.Sheets['Personnes'];
+      if (!personsSheet && sheetNames.length > 0) {
+        personsSheet = workbook.Sheets[sheetNames[0]];
+        console.log('📄 Utilisation de la feuille:', sheetNames[0]);
       }
+      if (!personsSheet) {
+        throw new Error('Aucune feuille trouvée dans le fichier Excel.');
+      }
+
+      let relationsSheet = workbook.Sheets['Relations'];
+      if (!relationsSheet && sheetNames.length > 1) {
+        relationsSheet = workbook.Sheets[sheetNames[1]];
+      }
+
       const persons = XLSX.utils.sheet_to_json(personsSheet);
       const relations = relationsSheet ? XLSX.utils.sheet_to_json(relationsSheet) : [];
 
-      // 🔹 Appel réel à l'API
+      if (!persons || persons.length === 0) {
+        throw new Error('La feuille sélectionnée ne contient aucune donnée.');
+      }
+
       const result = await importExcel({ persons, relations });
       setImportMessage({
         type: 'success',
-        text: `Import réussi : ${result.imported} personnes importées, ${result.updated} mises à jour.`
+        text: `Import réussi : ${result.imported || 0} personnes importées, ${result.updated || 0} mises à jour.`
       });
-      loadTree(); // recharger l'arbre
+      loadTree();
     } catch (err) {
-      console.error(err);
+      console.error('❌ Erreur import:', err);
       setImportMessage({
         type: 'error',
-        text: err.message || 'Erreur lors de l\'import.'
+        text: err.message || 'Erreur lors de l\'import. Vérifie le format du fichier.'
       });
     } finally {
       setImportLoading(false);
