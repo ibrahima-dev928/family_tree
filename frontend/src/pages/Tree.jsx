@@ -24,30 +24,66 @@ function formatYears(birthDate, deathDate) {
 }
 
 // =========================================================
-// Fonction pour récupérer les données d'export d'une personne
-// Utilise directement person.parentRelations (comme dans PersonDetail)
+// Fonction qui récupère les parents d'une personne
+// Tente plusieurs structures : parentRelations, parents, childRelations
 // =========================================================
-function getPersonExportData(person, persons, partnerships) {
-  // Récupérer les parents depuis parentRelations
-  const parentRels = person.parentRelations || [];
+function getParents(person, persons) {
+  let parentNames = [];
   let fatherName = 'Inconnu';
   let motherName = 'Inconnue';
-  let parentsList = [];
 
-  parentRels.forEach(rel => {
-    const parent = rel.parent;
-    if (parent) {
-      parentsList.push(`${parent.firstName} ${parent.lastName}`);
-      if (parent.gender === 'male') {
-        fatherName = `${parent.firstName} ${parent.lastName}`;
-      } else if (parent.gender === 'female') {
-        motherName = `${parent.firstName} ${parent.lastName}`;
+  // 1. Tester parentRelations (souvent utilisé par Prisma)
+  if (person.parentRelations && Array.isArray(person.parentRelations)) {
+    person.parentRelations.forEach(rel => {
+      // Si rel.parent est un objet contenant firstName, lastName
+      if (rel.parent && rel.parent.firstName) {
+        const name = `${rel.parent.firstName} ${rel.parent.lastName}`;
+        parentNames.push(name);
+        if (rel.parent.gender === 'male') fatherName = name;
+        else if (rel.parent.gender === 'female') motherName = name;
       }
-    }
-  });
+      // Si rel.parentId est un ID, on cherche dans persons
+      else if (rel.parentId) {
+        const parent = persons.find(p => p.id === rel.parentId);
+        if (parent) {
+          const name = `${parent.firstName} ${parent.lastName}`;
+          parentNames.push(name);
+          if (parent.gender === 'male') fatherName = name;
+          else if (parent.gender === 'female') motherName = name;
+        }
+      }
+    });
+  }
 
-  // Si on n'a pas de genre, on affiche tous les parents
-  const parentsStr = parentsList.length > 0 ? parentsList.join(' & ') : 'Inconnu(s)';
+  // 2. Tester childRelations (si l'inverse)
+  if (person.childRelations && Array.isArray(person.childRelations) && parentNames.length === 0) {
+    person.childRelations.forEach(rel => {
+      if (rel.parent && rel.parent.firstName) {
+        const name = `${rel.parent.firstName} ${rel.parent.lastName}`;
+        parentNames.push(name);
+        if (rel.parent.gender === 'male') fatherName = name;
+        else if (rel.parent.gender === 'female') motherName = name;
+      }
+    });
+  }
+
+  // 3. Tester parents (ancien format)
+  if (person.parents && Array.isArray(person.parents) && parentNames.length === 0) {
+    person.parents.forEach(p => {
+      const name = `${p.firstName} ${p.lastName}`;
+      parentNames.push(name);
+    });
+  }
+
+  // 4. Si aucun parent trouvé, on laisse Inconnu
+  const parentsStr = parentNames.length > 0 ? parentNames.join(' & ') : 'Inconnu(s)';
+
+  return { parentsStr, fatherName, motherName };
+}
+
+// =========================================================
+function getPersonExportData(person, persons, partnerships) {
+  const { parentsStr, fatherName, motherName } = getParents(person, persons);
 
   // Trouver le conjoint
   const partnership = partnerships.find(p => p.person1Id === person.id || p.person2Id === person.id);
@@ -86,17 +122,14 @@ function Tree() {
   const [zoom, setZoom] = useState(1);
   const canvasRef = useRef(null);
 
-  // Import/Export state
   const [showImportExport, setShowImportExport] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importMessage, setImportMessage] = useState(null);
 
-  // Gestion du zoom (correction passive)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const onWheel = (e) => {
       if (!e.ctrlKey) return;
       e.preventDefault();
@@ -109,8 +142,19 @@ function Tree() {
   async function loadTree() {
     try {
       const data = await getFullTree();
-      setAllPersons(data.persons || []);
-      setAllPartnerships(data.partnerships || []);
+      const persons = data.persons || [];
+      const partnerships = data.partnerships || [];
+
+      // DIAGNOSTIC : afficher la structure d'une personne pour voir les relations
+      if (persons.length > 0) {
+        console.log('🔍 Exemple de personne :', persons[0]);
+        console.log('🔍 Clés disponibles :', Object.keys(persons[0]));
+        console.log('🔍 parentRelations :', persons[0].parentRelations);
+        console.log('🔍 childRelations :', persons[0].childRelations);
+      }
+
+      setAllPersons(persons);
+      setAllPartnerships(partnerships);
       setLayout(buildTreeLayout(data));
     } catch (err) {
       setError('Impossible de charger l\'arbre généalogique.');
@@ -123,7 +167,6 @@ function Tree() {
     loadTree();
   }, []);
 
-  // --- IMPORT EXCEL (simulé) ---
   async function handleImport() {
     if (!importFile) {
       setImportMessage({ type: 'error', text: 'Veuillez sélectionner un fichier Excel.' });
@@ -139,7 +182,6 @@ function Tree() {
         throw new Error('La feuille "Personnes" est obligatoire.');
       }
       const persons = XLSX.utils.sheet_to_json(personsSheet);
-      // Simulation d'import (à remplacer par un vrai appel backend)
       setImportMessage({ type: 'success', text: `${persons.length} personnes importées (simulation).` });
       loadTree();
     } catch (err) {
@@ -150,18 +192,15 @@ function Tree() {
     }
   }
 
-  // --- EXPORT EXCEL (génération locale) ---
   async function handleExportExcel() {
     if (!allPersons.length) {
       setImportMessage({ type: 'error', text: 'Aucune personne à exporter.' });
       return;
     }
 
-    // Construire les données enrichies
     const exportData = allPersons
       .map(person => getPersonExportData(person, allPersons, allPartnerships))
       .sort((a, b) => {
-        // Tri par nom, puis prénom
         if (a.nom < b.nom) return -1;
         if (a.nom > b.nom) return 1;
         if (a.prenom < b.prenom) return -1;
@@ -177,7 +216,6 @@ function Tree() {
     saveAs(blob, 'arbre_genealogique.xlsx');
   }
 
-  // --- EXPORT PDF (génération locale) ---
   function handleExportPDF() {
     if (!allPersons.length) {
       setImportMessage({ type: 'error', text: 'Aucune personne à exporter.' });
