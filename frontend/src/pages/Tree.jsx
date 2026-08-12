@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
 import { getFullTree } from '../api/tree.api';
-import { getRelations } from '../api/persons.api';
 import { buildTreeLayout } from '../utils/buildTreeGenerations';
 import RelationForm from '../components/RelationForm';
 import PersonForm from '../components/PersonForm';
@@ -22,38 +21,6 @@ function formatYears(birthDate, deathDate) {
     return `${birthYear} – ${new Date(deathDate).getFullYear()}`;
   }
   return birthDate ? `Né(e) ${birthYear}` : '';
-}
-
-// =========================================================
-// Fonction qui construit les relations à partir des données des personnes
-// (fallback si getRelations() ne fonctionne pas)
-// =========================================================
-function buildRelationsFromPersons(persons) {
-  const relations = [];
-
-  persons.forEach(person => {
-    // Vérifier parentRelations (la personne est enfant)
-    if (person.parentRelations && Array.isArray(person.parentRelations)) {
-      person.parentRelations.forEach(rel => {
-        const parentId = rel.parentId || rel.parent?.id;
-        if (parentId) {
-          relations.push({ parentId, childId: person.id });
-        }
-      });
-    }
-
-    // Vérifier childRelations (la personne est parent)
-    if (person.childRelations && Array.isArray(person.childRelations)) {
-      person.childRelations.forEach(rel => {
-        const childId = rel.childId || rel.child?.id;
-        if (childId) {
-          relations.push({ parentId: person.id, childId });
-        }
-      });
-    }
-  });
-
-  return relations;
 }
 
 // =========================================================
@@ -146,32 +113,36 @@ function Tree() {
 
   async function loadTree() {
     try {
-      const [treeData, relationsData] = await Promise.all([
-        getFullTree(),
-        getRelations().catch((err) => {
-          console.warn('⚠️ getRelations a échoué, fallback depuis les données des personnes:', err);
-          return null;
-        })
-      ]);
-
+      const treeData = await getFullTree();
       const persons = treeData.persons || [];
       const partnerships = treeData.partnerships || [];
 
-      // Si getRelations a réussi, on utilise ses données
-      let relations = [];
-      if (relationsData && Array.isArray(relationsData) && relationsData.length > 0) {
-        relations = relationsData;
-        console.log('✅ Relations chargées depuis l\'API:', relations.length);
-      } else {
-        // Fallback : construire les relations depuis les données des personnes
-        relations = buildRelationsFromPersons(persons);
-        console.log('🔄 Relations construites depuis les personnes:', relations.length);
+      // Construire le layout
+      const layout = buildTreeLayout(treeData);
+
+      // Extraire les relations depuis les descentSegments du layout
+      const relations = [];
+      if (layout.descentSegments && layout.placedPersons) {
+        layout.descentSegments.forEach(seg => {
+          // Trouver le parent (point de départ x1,y1)
+          const parent = layout.placedPersons.find(p =>
+            Math.abs(p.x - seg.x1) < 1 && Math.abs(p.y - seg.y1) < 1
+          );
+          // Trouver l'enfant (point d'arrivée x2,y2)
+          const child = layout.placedPersons.find(p =>
+            Math.abs(p.x - seg.x2) < 1 && Math.abs(p.y - seg.y2) < 1
+          );
+          if (parent && child) {
+            relations.push({ parentId: parent.id, childId: child.id });
+          }
+        });
+        console.log('🔗 Relations extraites du layout:', relations.length);
       }
 
       setAllPersons(persons);
       setAllPartnerships(partnerships);
       setAllRelations(relations);
-      setLayout(buildTreeLayout(treeData));
+      setLayout(layout);
     } catch (err) {
       console.error('❌ Erreur de chargement:', err);
       setError('Impossible de charger l\'arbre généalogique.');
@@ -222,7 +193,6 @@ function Tree() {
         // Tri par PRÉNOM (alphabétique)
         if (a.prenom < b.prenom) return -1;
         if (a.prenom > b.prenom) return 1;
-        // Si même prénom, tri par nom
         if (a.nom < b.nom) return -1;
         if (a.nom > b.nom) return 1;
         return 0;
@@ -246,7 +216,6 @@ function Tree() {
     const exportData = allPersons
       .map(person => getPersonExportData(person, allPersons, allPartnerships, allRelations))
       .sort((a, b) => {
-        // Tri par PRÉNOM (alphabétique)
         if (a.prenom < b.prenom) return -1;
         if (a.prenom > b.prenom) return 1;
         if (a.nom < b.nom) return -1;
