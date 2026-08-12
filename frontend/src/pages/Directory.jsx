@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { listPersons } from '../api/persons.api';
 import { getFullTree } from '../api/tree.api';
-import { getRelations } from '../api/persons.api';
+import { buildTreeLayout } from '../utils/buildTreeGenerations';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
@@ -18,11 +18,44 @@ function formatBirth(birthDate) {
 }
 
 // -------------------------------------------------------------
+// Fonction pour extraire les relations depuis le layout
+// -------------------------------------------------------------
+function extractRelationsFromLayout(layout) {
+  const relations = [];
+  const cardWidth = 168; // largeur d'une carte
+  const cardHeight = 90; // hauteur estimée d'une carte
+
+  if (!layout.descentSegments || !layout.placedPersons) return relations;
+
+  layout.descentSegments.forEach(seg => {
+    // Trouver le parent : le segment commence au centre-bas de la carte parent
+    const parent = layout.placedPersons.find(p => {
+      const centerX = p.x + cardWidth / 2;
+      const centerY = p.y + cardHeight;
+      const dist = Math.hypot(centerX - seg.x1, centerY - seg.y1);
+      return dist < 30; // tolérance augmentée
+    });
+    // Trouver l'enfant : le segment se termine au centre-haut de la carte enfant
+    const child = layout.placedPersons.find(p => {
+      const centerX = p.x + cardWidth / 2;
+      const centerY = p.y;
+      const dist = Math.hypot(centerX - seg.x2, centerY - seg.y2);
+      return dist < 30;
+    });
+    if (parent && child) {
+      relations.push({ parentId: parent.id, childId: child.id });
+    }
+  });
+
+  console.log('🔗 Relations extraites du layout:', relations.length);
+  return relations;
+}
+
+// -------------------------------------------------------------
 // Fonction pour construire les données enrichies d'une personne
-// (parents, conjoint, enfants, frères/sœurs)
 // -------------------------------------------------------------
 function getPersonFullData(person, persons, partnerships, relations) {
-  // 1. Parents
+  // Parents
   const parentRels = relations.filter(r => r.childId === person.id);
   const parentNames = parentRels
     .map(r => {
@@ -32,7 +65,7 @@ function getPersonFullData(person, persons, partnerships, relations) {
     .filter(Boolean);
   const parentsStr = parentNames.length > 0 ? parentNames.join(' & ') : 'Inconnu(s)';
 
-  // 2. Conjoint
+  // Conjoint
   const partnership = partnerships.find(p => p.person1Id === person.id || p.person2Id === person.id);
   let spouseNames = [];
   if (partnership) {
@@ -42,7 +75,7 @@ function getPersonFullData(person, persons, partnerships, relations) {
   }
   const conjointStr = spouseNames.length > 0 ? spouseNames.join(' & ') : 'Célibataire';
 
-  // 3. Enfants (personnes dont ce person est parent)
+  // Enfants
   const childRels = relations.filter(r => r.parentId === person.id);
   const childNames = childRels
     .map(r => {
@@ -52,7 +85,7 @@ function getPersonFullData(person, persons, partnerships, relations) {
     .filter(Boolean);
   const enfantsStr = childNames.length > 0 ? childNames.join(' & ') : 'Aucun enfant';
 
-  // 4. Frères et sœurs (personnes ayant au moins un parent en commun)
+  // Frères et sœurs
   const siblingIds = new Set();
   parentRels.forEach(pr => {
     const siblings = relations
@@ -87,10 +120,8 @@ function Directory() {
   const [persons, setPersons] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-
-  // États pour l'export
   const [exporting, setExporting] = useState(false);
-  const [fullData, setFullData] = useState(null); // { persons, partnerships, relations }
+  const [fullData, setFullData] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -106,21 +137,29 @@ function Directory() {
     load();
   }, []);
 
-  // Charger les données complètes pour l'export (une seule fois)
+  // Charger les données complètes pour l'export
   useEffect(() => {
     async function loadFullData() {
       try {
-        const [treeData, relationsData] = await Promise.all([
-          getFullTree().catch(() => ({ persons: [], partnerships: [] })),
-          getRelations().catch(() => []),
-        ]);
+        const treeData = await getFullTree();
+        const persons = treeData.persons || [];
+        const partnerships = treeData.partnerships || [];
+
+        // Construire le layout pour extraire les relations
+        const layout = buildTreeLayout(treeData);
+        const relations = extractRelationsFromLayout(layout);
+
         setFullData({
-          persons: treeData.persons || [],
-          partnerships: treeData.partnerships || [],
-          relations: relationsData || [],
+          persons: persons,
+          partnerships: partnerships,
+          relations: relations,
+        });
+        console.log('📊 Données complètes chargées:', {
+          personnes: persons.length,
+          relations: relations.length,
         });
       } catch (err) {
-        console.warn('Impossible de charger les données complètes pour l\'export', err);
+        console.warn('Erreur chargement données complètes', err);
       }
     }
     loadFullData();
@@ -146,7 +185,6 @@ function Directory() {
         return;
       }
 
-      // Construire les données enrichies pour toutes les personnes
       const exportData = allPersons
         .map(person => getPersonFullData(person, allPersons, partnerships, relations))
         .sort((a, b) => {
