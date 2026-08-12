@@ -160,4 +160,13 @@ async function updatePhoto(personId, photoUrl) {
   });
 }
 
-module.exports = { getById, list, createPerson, updatePerson, deletePerson, updatePhoto };
+async function getRelations() {
+  return prisma.parentChildRelations.findMany({
+    select: {
+      parentId: true,
+      childId: true,
+    },
+  });
+}
+
+module.exports = { getById, list, createPerson, updatePerson, deletePerson, updatePhoto, getRelations };

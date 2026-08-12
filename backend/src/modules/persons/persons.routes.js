@@ -9,6 +9,9 @@ const router = express.Router();
 
 router.use(authMiddleware);
 
+// ROUTE POUR LES RELATIONS (AJOUTÉE ICI, AVANT /:id)
+router.get('/relations', personsController.getRelations);
+
 router.get('/', personsController.list);
 router.get('/:id', personsController.getOne);
 router.post('/', validate(createPersonSchema), personsController.create);

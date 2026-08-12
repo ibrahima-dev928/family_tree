@@ -63,4 +63,13 @@ async function uploadPhoto(req, res, next) {
   }
 }
 
-module.exports = { getOne, list, create, update, remove, uploadPhoto };
+async function getRelations(req, res, next) {
+  try {
+    const relations = await personsService.getRelations();
+    res.status(200).json(relations);
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getOne, list, create, update, remove, uploadPhoto, getRelations };

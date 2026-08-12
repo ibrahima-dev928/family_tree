@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { getFullTree } from '../api/tree.api';
+import { getRelations } from '../api/persons.api';
 import { buildTreeLayout } from '../utils/buildTreeGenerations';
 import RelationForm from '../components/RelationForm';
 import PersonForm from '../components/PersonForm';
@@ -24,66 +25,40 @@ function formatYears(birthDate, deathDate) {
 }
 
 // =========================================================
-// Fonction qui récupère les parents d'une personne
-// Tente plusieurs structures : parentRelations, parents, childRelations
+// Fonction qui construit les données enrichies pour une personne
+// Utilise les relations parent-enfant récupérées par getRelations()
 // =========================================================
-function getParents(person, persons) {
-  let parentNames = [];
+function getPersonExportData(person, persons, partnerships, relations) {
+  // Trouver les relations où cette personne est enfant
+  const parentRels = relations.filter(r => r.childId === person.id);
+
+  // Récupérer les noms des parents depuis la liste des personnes
+  const parentNames = parentRels
+    .map(r => {
+      const parent = persons.find(p => p.id === r.parentId);
+      return parent ? `${parent.firstName} ${parent.lastName}` : null;
+    })
+    .filter(Boolean);
+
+  // Construire la chaîne "Parents"
+  let parentsStr = 'Inconnu(s)';
   let fatherName = 'Inconnu';
   let motherName = 'Inconnue';
 
-  // 1. Tester parentRelations (souvent utilisé par Prisma)
-  if (person.parentRelations && Array.isArray(person.parentRelations)) {
-    person.parentRelations.forEach(rel => {
-      // Si rel.parent est un objet contenant firstName, lastName
-      if (rel.parent && rel.parent.firstName) {
-        const name = `${rel.parent.firstName} ${rel.parent.lastName}`;
-        parentNames.push(name);
-        if (rel.parent.gender === 'male') fatherName = name;
-        else if (rel.parent.gender === 'female') motherName = name;
-      }
-      // Si rel.parentId est un ID, on cherche dans persons
-      else if (rel.parentId) {
-        const parent = persons.find(p => p.id === rel.parentId);
-        if (parent) {
-          const name = `${parent.firstName} ${parent.lastName}`;
-          parentNames.push(name);
-          if (parent.gender === 'male') fatherName = name;
-          else if (parent.gender === 'female') motherName = name;
-        }
-      }
-    });
+  if (parentNames.length > 0) {
+    parentsStr = parentNames.join(' & ');
+
+    // Essayer de différencier père et mère (si le genre est disponible)
+    const father = parentRels
+      .map(r => persons.find(p => p.id === r.parentId))
+      .find(p => p && p.gender === 'male');
+    const mother = parentRels
+      .map(r => persons.find(p => p.id === r.parentId))
+      .find(p => p && p.gender === 'female');
+
+    if (father) fatherName = `${father.firstName} ${father.lastName}`;
+    if (mother) motherName = `${mother.firstName} ${mother.lastName}`;
   }
-
-  // 2. Tester childRelations (si l'inverse)
-  if (person.childRelations && Array.isArray(person.childRelations) && parentNames.length === 0) {
-    person.childRelations.forEach(rel => {
-      if (rel.parent && rel.parent.firstName) {
-        const name = `${rel.parent.firstName} ${rel.parent.lastName}`;
-        parentNames.push(name);
-        if (rel.parent.gender === 'male') fatherName = name;
-        else if (rel.parent.gender === 'female') motherName = name;
-      }
-    });
-  }
-
-  // 3. Tester parents (ancien format)
-  if (person.parents && Array.isArray(person.parents) && parentNames.length === 0) {
-    person.parents.forEach(p => {
-      const name = `${p.firstName} ${p.lastName}`;
-      parentNames.push(name);
-    });
-  }
-
-  // 4. Si aucun parent trouvé, on laisse Inconnu
-  const parentsStr = parentNames.length > 0 ? parentNames.join(' & ') : 'Inconnu(s)';
-
-  return { parentsStr, fatherName, motherName };
-}
-
-// =========================================================
-function getPersonExportData(person, persons, partnerships) {
-  const { parentsStr, fatherName, motherName } = getParents(person, persons);
 
   // Trouver le conjoint
   const partnership = partnerships.find(p => p.person1Id === person.id || p.person2Id === person.id);
@@ -113,6 +88,7 @@ function Tree() {
   const [layout, setLayout] = useState(null);
   const [allPersons, setAllPersons] = useState([]);
   const [allPartnerships, setAllPartnerships] = useState([]);
+  const [allRelations, setAllRelations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showRelationForm, setShowRelationForm] = useState(false);
@@ -122,14 +98,17 @@ function Tree() {
   const [zoom, setZoom] = useState(1);
   const canvasRef = useRef(null);
 
+  // Import/Export state
   const [showImportExport, setShowImportExport] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importMessage, setImportMessage] = useState(null);
 
+  // Gestion du zoom (correction passive)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
     const onWheel = (e) => {
       if (!e.ctrlKey) return;
       e.preventDefault();
@@ -141,22 +120,25 @@ function Tree() {
 
   async function loadTree() {
     try {
-      const data = await getFullTree();
-      const persons = data.persons || [];
-      const partnerships = data.partnerships || [];
+      // Charger l'arbre et les relations en parallèle
+      const [treeData, relationsData] = await Promise.all([
+        getFullTree(),
+        getRelations().catch(() => []) // si l'API n'existe pas, on continue avec un tableau vide
+      ]);
 
-      // DIAGNOSTIC : afficher la structure d'une personne pour voir les relations
-      if (persons.length > 0) {
-        console.log('🔍 Exemple de personne :', persons[0]);
-        console.log('🔍 Clés disponibles :', Object.keys(persons[0]));
-        console.log('🔍 parentRelations :', persons[0].parentRelations);
-        console.log('🔍 childRelations :', persons[0].childRelations);
-      }
+      const persons = treeData.persons || [];
+      const partnerships = treeData.partnerships || [];
+
+      console.log('🔍 Nombre de personnes chargées :', persons.length);
+      console.log('🔍 Nombre de relations chargées :', relationsData.length);
+      console.log('🔍 Exemple de relation :', relationsData[0]);
 
       setAllPersons(persons);
       setAllPartnerships(partnerships);
-      setLayout(buildTreeLayout(data));
+      setAllRelations(relationsData);
+      setLayout(buildTreeLayout(treeData));
     } catch (err) {
+      console.error('Erreur de chargement:', err);
       setError('Impossible de charger l\'arbre généalogique.');
     } finally {
       setLoading(false);
@@ -167,6 +149,7 @@ function Tree() {
     loadTree();
   }, []);
 
+  // --- IMPORT EXCEL (simulé pour l'instant) ---
   async function handleImport() {
     if (!importFile) {
       setImportMessage({ type: 'error', text: 'Veuillez sélectionner un fichier Excel.' });
@@ -182,6 +165,7 @@ function Tree() {
         throw new Error('La feuille "Personnes" est obligatoire.');
       }
       const persons = XLSX.utils.sheet_to_json(personsSheet);
+      // Simulation d'import (à remplacer par un vrai appel backend)
       setImportMessage({ type: 'success', text: `${persons.length} personnes importées (simulation).` });
       loadTree();
     } catch (err) {
@@ -192,15 +176,18 @@ function Tree() {
     }
   }
 
+  // --- EXPORT EXCEL (génération locale) ---
   async function handleExportExcel() {
     if (!allPersons.length) {
       setImportMessage({ type: 'error', text: 'Aucune personne à exporter.' });
       return;
     }
 
+    // Construire les données enrichies avec les relations
     const exportData = allPersons
-      .map(person => getPersonExportData(person, allPersons, allPartnerships))
+      .map(person => getPersonExportData(person, allPersons, allPartnerships, allRelations))
       .sort((a, b) => {
+        // Tri par nom, puis prénom
         if (a.nom < b.nom) return -1;
         if (a.nom > b.nom) return 1;
         if (a.prenom < b.prenom) return -1;
@@ -216,6 +203,7 @@ function Tree() {
     saveAs(blob, 'arbre_genealogique.xlsx');
   }
 
+  // --- EXPORT PDF (génération locale) ---
   function handleExportPDF() {
     if (!allPersons.length) {
       setImportMessage({ type: 'error', text: 'Aucune personne à exporter.' });
@@ -223,7 +211,7 @@ function Tree() {
     }
 
     const exportData = allPersons
-      .map(person => getPersonExportData(person, allPersons, allPartnerships))
+      .map(person => getPersonExportData(person, allPersons, allPartnerships, allRelations))
       .sort((a, b) => {
         if (a.nom < b.nom) return -1;
         if (a.nom > b.nom) return 1;

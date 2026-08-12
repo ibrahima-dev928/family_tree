@@ -33,3 +33,9 @@ export async function deletePerson(id) {
   const response = await apiClient.delete(`/persons/${id}`);
   return response.data;
 }
+
+// NOUVEAU
+export async function getRelations() {
+  const response = await apiClient.get('/relations');
+  return response.data;
+}
