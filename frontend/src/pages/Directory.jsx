@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { listPersons } from '../api/persons.api';
 import { getFullTree } from '../api/tree.api';
-import { buildTreeLayout } from '../utils/buildTreeGenerations';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
@@ -18,84 +17,53 @@ function formatBirth(birthDate) {
 }
 
 // -------------------------------------------------------------
-// Fonction pour extraire les relations depuis le layout
-// -------------------------------------------------------------
-function extractRelationsFromLayout(layout) {
-  const relations = [];
-  const cardWidth = 168; // largeur d'une carte
-  const cardHeight = 90; // hauteur estimée d'une carte
-
-  if (!layout.descentSegments || !layout.placedPersons) return relations;
-
-  layout.descentSegments.forEach(seg => {
-    // Trouver le parent : le segment commence au centre-bas de la carte parent
-    const parent = layout.placedPersons.find(p => {
-      const centerX = p.x + cardWidth / 2;
-      const centerY = p.y + cardHeight;
-      const dist = Math.hypot(centerX - seg.x1, centerY - seg.y1);
-      return dist < 30; // tolérance augmentée
-    });
-    // Trouver l'enfant : le segment se termine au centre-haut de la carte enfant
-    const child = layout.placedPersons.find(p => {
-      const centerX = p.x + cardWidth / 2;
-      const centerY = p.y;
-      const dist = Math.hypot(centerX - seg.x2, centerY - seg.y2);
-      return dist < 30;
-    });
-    if (parent && child) {
-      relations.push({ parentId: parent.id, childId: child.id });
-    }
-  });
-
-  console.log('🔗 Relations extraites du layout:', relations.length);
-  return relations;
-}
-
-// -------------------------------------------------------------
 // Fonction pour construire les données enrichies d'une personne
+// Utilise les relations (parentChildRelations) et partnerships
 // -------------------------------------------------------------
-function getPersonFullData(person, persons, partnerships, relations) {
-  // Parents
-  const parentRels = relations.filter(r => r.childId === person.id);
+function getPersonFullData(person, allPersons, parentChildRelations, partnerships) {
+  // 1. Parents
+  const parentRels = parentChildRelations.filter(r => r.childId === person.id);
   const parentNames = parentRels
     .map(r => {
-      const parent = persons.find(p => p.id === r.parentId);
+      const parent = allPersons.find(p => p.id === r.parentId);
       return parent ? `${parent.firstName} ${parent.lastName}` : null;
     })
     .filter(Boolean);
   const parentsStr = parentNames.length > 0 ? parentNames.join(' & ') : 'Inconnu(s)';
 
-  // Conjoint
-  const partnership = partnerships.find(p => p.person1Id === person.id || p.person2Id === person.id);
-  let spouseNames = [];
-  if (partnership) {
-    const spouseId = partnership.person1Id === person.id ? partnership.person2Id : partnership.person1Id;
-    const spouse = persons.find(p => p.id === spouseId);
-    if (spouse) spouseNames.push(`${spouse.firstName} ${spouse.lastName}`);
-  }
-  const conjointStr = spouseNames.length > 0 ? spouseNames.join(' & ') : 'Célibataire';
+  // 2. Conjoint(s) (unions)
+  const partnerRels = partnerships.filter(p => p.person1Id === person.id || p.person2Id === person.id);
+  const partnerNames = partnerRels
+    .map(p => {
+      const partnerId = p.person1Id === person.id ? p.person2Id : p.person1Id;
+      const partner = allPersons.find(p => p.id === partnerId);
+      return partner ? `${partner.firstName} ${partner.lastName}` : null;
+    })
+    .filter(Boolean);
+  const conjointStr = partnerNames.length > 0 ? partnerNames.join(' & ') : 'Célibataire';
 
-  // Enfants
-  const childRels = relations.filter(r => r.parentId === person.id);
+  // 3. Enfants (personnes dont ce person est parent)
+  const childRels = parentChildRelations.filter(r => r.parentId === person.id);
   const childNames = childRels
     .map(r => {
-      const child = persons.find(p => p.id === r.childId);
+      const child = allPersons.find(p => p.id === r.childId);
       return child ? `${child.firstName} ${child.lastName}` : null;
     })
     .filter(Boolean);
   const enfantsStr = childNames.length > 0 ? childNames.join(' & ') : 'Aucun enfant';
+  const nbEnfants = childNames.length;
 
-  // Frères et sœurs
+  // 4. Frères et sœurs (personnes partageant au moins un parent)
+  const parentIds = parentRels.map(r => r.parentId);
   const siblingIds = new Set();
-  parentRels.forEach(pr => {
-    const siblings = relations
-      .filter(r => r.parentId === pr.parentId && r.childId !== person.id)
-      .map(r => r.childId);
-    siblings.forEach(id => siblingIds.add(id));
+  parentIds.forEach(pid => {
+    parentChildRelations
+      .filter(r => r.parentId === pid && r.childId !== person.id)
+      .forEach(r => siblingIds.add(r.childId));
   });
   const siblingNames = Array.from(siblingIds)
     .map(id => {
-      const sib = persons.find(p => p.id === id);
+      const sib = allPersons.find(p => p.id === id);
       return sib ? `${sib.firstName} ${sib.lastName}` : null;
     })
     .filter(Boolean);
@@ -110,6 +78,7 @@ function getPersonFullData(person, persons, partnerships, relations) {
     parents: parentsStr,
     conjoint: conjointStr,
     enfants: enfantsStr,
+    nbEnfants: nbEnfants,
     freresSoeurs: freresSoeursStr,
     biographie: person.bio || '',
   };
@@ -121,7 +90,7 @@ function Directory() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const [fullData, setFullData] = useState(null);
+  const [fullData, setFullData] = useState(null); // { persons, parentChildRelations, partnerships }
 
   useEffect(() => {
     async function load() {
@@ -142,21 +111,15 @@ function Directory() {
     async function loadFullData() {
       try {
         const treeData = await getFullTree();
-        const persons = treeData.persons || [];
-        const partnerships = treeData.partnerships || [];
-
-        // Construire le layout pour extraire les relations
-        const layout = buildTreeLayout(treeData);
-        const relations = extractRelationsFromLayout(layout);
-
         setFullData({
-          persons: persons,
-          partnerships: partnerships,
-          relations: relations,
+          persons: treeData.persons || [],
+          parentChildRelations: treeData.parentChildRelations || [],
+          partnerships: treeData.partnerships || [],
         });
         console.log('📊 Données complètes chargées:', {
-          personnes: persons.length,
-          relations: relations.length,
+          persons: treeData.persons?.length,
+          relations: treeData.parentChildRelations?.length,
+          partnerships: treeData.partnerships?.length,
         });
       } catch (err) {
         console.warn('Erreur chargement données complètes', err);
@@ -170,6 +133,21 @@ function Directory() {
     return fullName.includes(search.toLowerCase());
   });
 
+  // --- Fonction d'export enrichie ---
+  function buildExportData() {
+    if (!fullData) return [];
+    const { persons: allPersons, parentChildRelations, partnerships } = fullData;
+    return allPersons
+      .map(person => getPersonFullData(person, allPersons, parentChildRelations, partnerships))
+      .sort((a, b) => {
+        if (a.nom < b.nom) return -1;
+        if (a.nom > b.nom) return 1;
+        if (a.prenom < b.prenom) return -1;
+        if (a.prenom > b.prenom) return 1;
+        return 0;
+      });
+  }
+
   // --- EXPORT EXCEL ---
   async function handleExportExcel() {
     if (!fullData) {
@@ -178,22 +156,12 @@ function Directory() {
     }
     setExporting(true);
     try {
-      const { persons: allPersons, partnerships, relations } = fullData;
-      if (!allPersons.length) {
+      const exportData = buildExportData();
+      if (!exportData.length) {
         alert('Aucune personne à exporter.');
         setExporting(false);
         return;
       }
-
-      const exportData = allPersons
-        .map(person => getPersonFullData(person, allPersons, partnerships, relations))
-        .sort((a, b) => {
-          if (a.nom < b.nom) return -1;
-          if (a.nom > b.nom) return 1;
-          if (a.prenom < b.prenom) return -1;
-          if (a.prenom > b.prenom) return 1;
-          return 0;
-        });
 
       const workbook = XLSX.utils.book_new();
       const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -217,22 +185,12 @@ function Directory() {
     }
     setExporting(true);
     try {
-      const { persons: allPersons, partnerships, relations } = fullData;
-      if (!allPersons.length) {
+      const exportData = buildExportData();
+      if (!exportData.length) {
         alert('Aucune personne à exporter.');
         setExporting(false);
         return;
       }
-
-      const exportData = allPersons
-        .map(person => getPersonFullData(person, allPersons, partnerships, relations))
-        .sort((a, b) => {
-          if (a.nom < b.nom) return -1;
-          if (a.nom > b.nom) return 1;
-          if (a.prenom < b.prenom) return -1;
-          if (a.prenom > b.prenom) return 1;
-          return 0;
-        });
 
       const doc = new jsPDF('landscape', 'mm', 'a4');
       const pageWidth = doc.internal.pageSize.getWidth();
