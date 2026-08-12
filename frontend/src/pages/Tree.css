@@ -294,3 +294,128 @@
 .import-export-close:hover {
   background: var(--paper);
 }
+
+/* --- Bouton Import/Export --- */
+.tree-import-btn {
+  background: var(--copper-deep);
+  color: var(--paper);
+  border-color: var(--copper-deep);
+}
+
+.tree-import-btn:hover {
+  background: var(--copper);
+  border-color: var(--copper);
+}
+
+/* --- Modal Import/Export --- */
+.import-export-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.import-export-modal {
+  background: var(--paper-raised);
+  border-radius: var(--radius-lg);
+  padding: 32px 40px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-card);
+}
+
+.import-export-modal h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-family: var(--font-display);
+  font-size: 20px;
+}
+
+.import-export-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.import-section,
+.export-section {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.import-section h3,
+.export-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 10px 0;
+  color: var(--ink);
+}
+
+.import-section input[type="file"] {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.import-section button,
+.export-section button {
+  background: var(--ink);
+  color: var(--paper);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.import-section button:hover:not(:disabled),
+.export-section button:hover {
+  background: var(--ink-deep);
+}
+
+.import-section button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.import-message {
+  margin-top: 8px;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+}
+
+.import-message.success {
+  background: rgba(122, 139, 127, 0.12);
+  color: var(--ink);
+  border: 1px solid rgba(122, 139, 127, 0.3);
+}
+
+.import-message.error {
+  background: rgba(184, 74, 62, 0.08);
+  color: var(--seal);
+  border: 1px solid rgba(184, 74, 62, 0.25);
+}
+
+.import-export-close {
+  display: block;
+  margin: 20px auto 0;
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 8px 20px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  color: var(--sage);
+  cursor: pointer;
+}
+
+.import-export-close:hover {
+  background: var(--paper);
+}

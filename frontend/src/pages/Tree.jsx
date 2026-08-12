@@ -47,6 +47,7 @@ function Tree() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
     const onWheel = (e) => {
       if (!e.ctrlKey) return;
       e.preventDefault();
