@@ -25,38 +25,52 @@ function formatYears(birthDate, deathDate) {
 
 // =========================================================
 // Fonction qui construit les données enrichies pour une personne
+// Utilise directement parentRelations et childRelations (comme PersonDetail)
 // =========================================================
-function getPersonExportData(person, persons, partnerships, relations) {
-  // Trouver les relations où cette personne est enfant
-  const parentRels = relations.filter(r => r.childId === person.id);
-
-  // Récupérer les noms des parents
-  const parentNames = parentRels
-    .map(r => {
-      const parent = persons.find(p => p.id === r.parentId);
-      return parent ? `${parent.firstName} ${parent.lastName}` : null;
-    })
-    .filter(Boolean);
-
-  let parentsStr = 'Inconnu(s)';
+function getPersonExportData(person, persons, partnerships) {
+  // 1. Récupérer les parents depuis parentRelations (la personne est enfant)
+  let parentsList = [];
   let fatherName = 'Inconnu';
   let motherName = 'Inconnue';
 
-  if (parentNames.length > 0) {
-    parentsStr = parentNames.join(' & ');
-
-    const father = parentRels
-      .map(r => persons.find(p => p.id === r.parentId))
-      .find(p => p && p.gender === 'male');
-    const mother = parentRels
-      .map(r => persons.find(p => p.id === r.parentId))
-      .find(p => p && p.gender === 'female');
-
-    if (father) fatherName = `${father.firstName} ${father.lastName}`;
-    if (mother) motherName = `${mother.firstName} ${mother.lastName}`;
+  // Utiliser parentRelations (inclus dans la personne par le backend)
+  if (person.parentRelations && Array.isArray(person.parentRelations)) {
+    person.parentRelations.forEach(rel => {
+      // Si rel.parent est un objet complet (inclus via Prisma)
+      if (rel.parent && rel.parent.firstName) {
+        const name = `${rel.parent.firstName} ${rel.parent.lastName}`;
+        parentsList.push(name);
+        if (rel.parent.gender === 'male') fatherName = name;
+        else if (rel.parent.gender === 'female') motherName = name;
+      }
+      // Si rel.parentId seulement, on cherche dans persons
+      else if (rel.parentId) {
+        const parent = persons.find(p => p.id === rel.parentId);
+        if (parent) {
+          const name = `${parent.firstName} ${parent.lastName}`;
+          parentsList.push(name);
+          if (parent.gender === 'male') fatherName = name;
+          else if (parent.gender === 'female') motherName = name;
+        }
+      }
+    });
   }
 
-  // Trouver le conjoint
+  // 2. Si aucun parent trouvé, chercher dans childRelations (rare, mais sécurité)
+  if (parentsList.length === 0 && person.childRelations && Array.isArray(person.childRelations)) {
+    person.childRelations.forEach(rel => {
+      if (rel.parent && rel.parent.firstName) {
+        const name = `${rel.parent.firstName} ${rel.parent.lastName}`;
+        parentsList.push(name);
+        if (rel.parent.gender === 'male') fatherName = name;
+        else if (rel.parent.gender === 'female') motherName = name;
+      }
+    });
+  }
+
+  const parentsStr = parentsList.length > 0 ? parentsList.join(' & ') : 'Inconnu(s)';
+
+  // 3. Trouver le conjoint
   const partnership = partnerships.find(p => p.person1Id === person.id || p.person2Id === person.id);
   let spouseName = 'Célibataire';
   if (partnership) {
@@ -84,7 +98,6 @@ function Tree() {
   const [layout, setLayout] = useState(null);
   const [allPersons, setAllPersons] = useState([]);
   const [allPartnerships, setAllPartnerships] = useState([]);
-  const [allRelations, setAllRelations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showRelationForm, setShowRelationForm] = useState(false);
@@ -117,32 +130,15 @@ function Tree() {
       const persons = treeData.persons || [];
       const partnerships = treeData.partnerships || [];
 
-      // Construire le layout
-      const layout = buildTreeLayout(treeData);
-
-      // Extraire les relations depuis les descentSegments du layout
-      const relations = [];
-      if (layout.descentSegments && layout.placedPersons) {
-        layout.descentSegments.forEach(seg => {
-          // Trouver le parent (point de départ x1,y1)
-          const parent = layout.placedPersons.find(p =>
-            Math.abs(p.x - seg.x1) < 1 && Math.abs(p.y - seg.y1) < 1
-          );
-          // Trouver l'enfant (point d'arrivée x2,y2)
-          const child = layout.placedPersons.find(p =>
-            Math.abs(p.x - seg.x2) < 1 && Math.abs(p.y - seg.y2) < 1
-          );
-          if (parent && child) {
-            relations.push({ parentId: parent.id, childId: child.id });
-          }
-        });
-        console.log('🔗 Relations extraites du layout:', relations.length);
+      // Log pour vérifier la présence des relations
+      if (persons.length > 0) {
+        console.log('🔍 Exemple de personne:', persons[0]);
+        console.log('🔍 parentRelations:', persons[0].parentRelations);
       }
 
       setAllPersons(persons);
       setAllPartnerships(partnerships);
-      setAllRelations(relations);
-      setLayout(layout);
+      setLayout(buildTreeLayout(treeData));
     } catch (err) {
       console.error('❌ Erreur de chargement:', err);
       setError('Impossible de charger l\'arbre généalogique.');
@@ -188,9 +184,9 @@ function Tree() {
     }
 
     const exportData = allPersons
-      .map(person => getPersonExportData(person, allPersons, allPartnerships, allRelations))
+      .map(person => getPersonExportData(person, allPersons, allPartnerships))
       .sort((a, b) => {
-        // Tri par PRÉNOM (alphabétique)
+        // Tri alphabétique par prénom
         if (a.prenom < b.prenom) return -1;
         if (a.prenom > b.prenom) return 1;
         if (a.nom < b.nom) return -1;
@@ -214,7 +210,7 @@ function Tree() {
     }
 
     const exportData = allPersons
-      .map(person => getPersonExportData(person, allPersons, allPartnerships, allRelations))
+      .map(person => getPersonExportData(person, allPersons, allPartnerships))
       .sort((a, b) => {
         if (a.prenom < b.prenom) return -1;
         if (a.prenom > b.prenom) return 1;
